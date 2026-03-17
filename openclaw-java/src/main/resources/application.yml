@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: openclaw-java
+  websocket:
+    path: /ws
+
+server:
+  port: 18789
+
+openclaw:
+  gateway:
+    bind: 127.0.0.1
+    port: 18789
+  agent:
+    model: "anthropic/claude-opus-4-6"
+  channels:
+    enabled: true
+  tools:
+    enabled: true
+  skills:
+    enabled: true
