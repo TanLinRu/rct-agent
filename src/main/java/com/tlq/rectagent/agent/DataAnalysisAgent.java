@@ -1,26 +1,26 @@
 package com.tlq.rectagent.agent;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
+import com.tlq.rectagent.config.ChatModelFactory;
 import com.tlq.rectagent.tools.DataAnalysisTools;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import java.util.Arrays;
 
 /**
  * 数据分析智能体
  * 负责执行具体的数据分析任务
  */
+@Slf4j
 @Component
 public class DataAnalysisAgent {
 
-    @Value("${spring.ai.dashscope.api-key}")
-    private String apiKey;
+    @Autowired
+    private ChatModelFactory chatModelFactory;
 
     private ReactAgent agent;
     private DataAnalysisTools dataAnalysisTools;
@@ -29,13 +29,7 @@ public class DataAnalysisAgent {
         if (agent == null) {
             synchronized (this) {
                 if (agent == null) {
-                    DashScopeApi dashScopeApi = DashScopeApi.builder()
-                            .apiKey(apiKey)
-                            .build();
-
-                    DashScopeChatModel chatModel = DashScopeChatModel.builder()
-                            .dashScopeApi(dashScopeApi)
-                            .build();
+                    DashScopeChatModel chatModel = chatModelFactory.getChatModel();
 
                     if (dataAnalysisTools == null) {
                         dataAnalysisTools = new DataAnalysisTools();
@@ -49,6 +43,7 @@ public class DataAnalysisAgent {
                             .methodTools(dataAnalysisTools)
                             .systemPrompt("你是一位资深的数据安全分析专家，专注于从复杂的数据结构中识别安全风险、异常模式和关键洞察。你的核心能力包括数据解析、风险识别、跨维度关联分析、风险量化评估、数据质量评估和业务影响映射。")
                             .instruction("提示词：{generated_prompt}\n请根据提示词执行数据分析任务。")
+                            .outputKey("analysis_result")
                             .saver(new MemorySaver())
                             .build();
                 }
@@ -67,8 +62,7 @@ public class DataAnalysisAgent {
             ReactAgent agent = getAgent();
             return agent.call(query).getText();
         } catch (GraphRunnerException e) {
-            // 处理GraphRunnerException异常
-            System.err.println("数据分析执行失败: " + e.getMessage());
+            log.error("数据分析执行失败: {}", e.getMessage(), e);
             return "数据分析执行失败: " + e.getMessage();
         }
     }

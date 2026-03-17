@@ -101,20 +101,23 @@ rect-agent/
 
 ### 环境要求
 
-- JDK 21+
+- **JDK**: 21 (D:\software\jdk-21.0.8)
 - Maven 3.8+
 - DashScope API Key (阿里云百炼)
 
 ### 配置步骤
 
-1. **设置环境变量**
+1. **配置 API Key（二选一）**
 
    ```bash
-   # Windows
+   # 方式1: 环境变量（推荐）
    set AI_DASHSCOPE_API_KEY=your_api_key_here
 
-   # Linux/Mac
-   export AI_DASHSCOPE_API_KEY=your_api_key_here
+   # 方式2: application.yml 配置
+   # spring:
+   #   ai:
+   #     dashscope:
+   #       api-key: your_api_key_here
    ```
 
 2. **构建项目**
@@ -178,12 +181,15 @@ String result = skill.processRequest(documentUrls, userRequirement);
 ### 核心类
 
 - **CoordinatorAgent**：协调多个智能体的执行
+- **SequentialAgentExecutor**：顺序执行智能体，支持数据传递
+- **AgentDataContext**：智能体间数据传递上下文
 - **IntentRecognitionAgent**：识别用户查询意图
 - **DynamicPromptAgent**：生成动态提示词
 - **DataAnalysisAgent**：执行数据分析
 - **MessageOptimizationAgent**：优化消息存储
 - **AgentScheduler**：调度智能体任务
 - **ContextManager**：管理上下文传递
+- **ChatModelFactory**：统一管理 ChatModel 实例
 - **DocumentLearningSkill**：文档学习技能
 
 ### 工具类
@@ -194,13 +200,18 @@ String result = skill.processRequest(documentUrls, userRequirement);
 - **PerformanceOptimizer**：性能优化
 - **ErrorHandler**：错误处理
 
+### 核心配置
+
+- **ChatModelFactory**：统一管理 DashScope API 和 ChatModel，配置优先读取 `spring.ai.dashscope.api-key`，fallback 到环境变量 `AI_DASHSCOPE_API_KEY`
+
 ## 技术挑战与解决方案
 
-1. **智能体协作**：使用 Spring AI Alibaba 的 Multi-agent 模式
-2. **上下文管理**：利用 Context Engineering 技术
+1. **智能体协作**：使用 Spring AI Alibaba 的 Multi-agent 模式 + SequentialAgentExecutor 自定义实现
+2. **上下文管理**：利用 Context Engineering 技术（ContextLoader、TokenBudgetManager、CheckpointRecoveryManager）
 3. **记忆存储**：实现 MemoryStore 和相关工具
-4. **性能优化**：合理设计智能体调用链，避免不必要的模型调用
-5. **数据传递**：使用 Instruction 占位符实现智能体间的数据传递
+4. **性能优化**：ChatModelFactory 单例模式 + 智能体实例缓存
+5. **数据传递**：使用 AgentDataContext + 占位符 `{user_intent}`、`{generated_prompt}` 实现智能体间的数据传递
+6. **资源管理**：AgentScheduler 添加 shutdown 方法，正确释放线程池资源
 
 ## 后续优化方案
 

@@ -1,9 +1,10 @@
 package com.tlq.rectagent.scheduler;
 
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
-import com.alibaba.cloud.ai.graph.agent.flow.agent.SequentialAgent;
 import com.tlq.rectagent.agent.*;
 import com.tlq.rectagent.communication.AgentCommunicationManager;
+import com.tlq.rectagent.config.ChatModelFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -13,11 +14,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 智能体调度器
  * 负责管理和协调多个智能体的执行
  */
+@Slf4j
 @Component
 public class AgentScheduler {
 
@@ -36,6 +39,12 @@ public class AgentScheduler {
     @Autowired
     private AgentCommunicationManager communicationManager;
 
+    @Autowired
+    private ChatModelFactory chatModelFactory;
+
+    @Autowired
+    private SequentialAgentExecutor sequentialAgentExecutor;
+
     private final ExecutorService executorService;
     private final Map<String, AgentTask> runningTasks;
 
@@ -49,19 +58,10 @@ public class AgentScheduler {
      * @return 协调智能体
      */
     public ReactAgent createCoordinatorAgent() {
-        // 直接创建模型，避免使用 getModel() 方法
-        com.alibaba.cloud.ai.dashscope.api.DashScopeApi dashScopeApi = com.alibaba.cloud.ai.dashscope.api.DashScopeApi.builder()
-                .apiKey(System.getenv("AI_DASHSCOPE_API_KEY"))
-                .build();
-
-        com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel chatModel = com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel.builder()
-                .dashScopeApi(dashScopeApi)
-                .build();
-
-        // 创建协调智能体
+        // 使用共享的ChatModel
         return ReactAgent.builder()
                 .name("coordinator_agent")
-                .model(chatModel)
+                .model(chatModelFactory.getChatModel())
                 .instruction("你是一位专业的智能体协调者，负责管理多个智能体之间的协作。请根据用户的请求，调用相应的智能体，并协调它们的工作流程。")
                 .build();
     }
@@ -102,22 +102,25 @@ public class AgentScheduler {
 
         String result = "";
         if ("coordinator".equals(task.getAgentName())) {
-            // 使用SequentialAgent
             try {
                 // 创建智能体列表，按照执行顺序排列
-                List<com.alibaba.cloud.ai.graph.agent.Agent> agents = new ArrayList<>();
+                List<com.alibaba.cloud.ai.graph.agent.ReactAgent> agents = new ArrayList<>();
                 agents.add(intentRecognitionAgent.getAgent());
                 agents.add(dynamicPromptAgent.getAgent());
                 agents.add(dataAnalysisAgent.getAgent());
-                
-                // 创建SequentialAgent
-                SequentialAgent sequentialAgent = SequentialAgent.builder()
-                        .subAgents(agents)
-                        .build();
-                
-                // 执行智能体序列
-                result = sequentialAgent.invoke(task.getInput()).get().toString();
+
+                // 定义输出key映射
+                Map<String, String> outputKeyMap = new HashMap<>();
+                outputKeyMap.put("intent_recognition_agent", "user_intent");
+                outputKeyMap.put("dynamic_prompt_agent", "generated_prompt");
+                outputKeyMap.put("data_analysis_agent", "analysis_result");
+
+                // 使用自定义SequentialAgentExecutor执行
+                SequentialAgentExecutor.SequentialResult execResult = sequentialAgentExecutor.execute(
+                        agents, task.getInput(), outputKeyMap);
+                result = execResult.getFinalOutput();
             } catch (Exception e) {
+                log.error("协调智能体执行失败: {}", e.getMessage(), e);
                 result = "协调智能体执行失败: " + e.getMessage();
             }
         } else {
@@ -230,5 +233,23 @@ public class AgentScheduler {
         public void setStatus(TaskStatus status) { this.status = status; }
         public String getResult() { return result; }
         public void setResult(String result) { this.result = result; }
+    }
+
+    /**
+     * 关闭调度器，释放资源
+     */
+    public void shutdown() {
+        log.info("AgentScheduler shutting down...");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        runningTasks.clear();
+        log.info("AgentScheduler shutdown complete");
     }
 }

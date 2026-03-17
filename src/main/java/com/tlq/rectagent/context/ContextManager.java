@@ -62,7 +62,7 @@ public class ContextManager {
         if (allMessages.size() > 10) {
             TokenBudgetManager.CompressedContext compressed =
                     tokenBudgetManager.compressContext(allMessages, basePrompt);
-            contextPrompt = contextLoader.buildPromptFromContext(sessionContext);
+            contextPrompt = compressed.getCompressedPrompt();
         }
 
         return basePrompt + "\n\n" + contextPrompt;

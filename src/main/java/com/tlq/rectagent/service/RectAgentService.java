@@ -1,12 +1,12 @@
 package com.tlq.rectagent.service;
 
 import com.alibaba.cloud.ai.dashscope.api.DashScopeAgentApi;
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.hook.modelcalllimit.ModelCallLimitHook;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
+import com.tlq.rectagent.config.ChatModelFactory;
 import com.tlq.rectagent.interceptor.ModelProcessInterceptor;
 import com.tlq.rectagent.interceptor.ToolMonitoringInterceptor;
 import com.tlq.rectagent.tools.DataAnalysisTools;
@@ -16,7 +16,7 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 
@@ -27,17 +27,11 @@ import java.util.function.BiFunction;
 @Service
 public class RectAgentService {
 
-    @Value("${spring.ai.dashscope.api-key}")
-    private String apiKey;
+    @Autowired
+    private ChatModelFactory chatModelFactory;
 
     public void testAgent() throws GraphRunnerException {
-        DashScopeApi dashScopeApi = DashScopeApi.builder()
-                .apiKey(apiKey)
-                .build();
-
-        DashScopeChatModel chatModel = DashScopeChatModel.builder()
-                .dashScopeApi(dashScopeApi)
-                .build();
+        DashScopeChatModel chatModel = chatModelFactory.getChatModel();
 
         DataAnalysisTools dataAnalysisTools = new DataAnalysisTools();
 
