@@ -115,7 +115,7 @@ public class SequentialAgentExecutor {
                     String nextInput = buildNextAgentInput(
                             agentOutputs,
                             agentName,
-                            outputKey
+                            outputKeyMap
                     );
                     currentInput = nextInput;
                 }
@@ -166,14 +166,15 @@ public class SequentialAgentExecutor {
     }
 
     private String buildNextAgentInput(Map<String, String> allOutputs, String previousAgentName,
-                                       String previousOutputKey) {
+                                       Map<String, String> outputKeyMap) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, String> entry : allOutputs.entrySet()) {
             if (!entry.getKey().equals(previousAgentName)) {
                 sb.append(buildAgentSummary(entry.getKey(), entry.getValue())).append("\n");
             }
         }
-        sb.append("【").append(previousOutputKey).append("】")
+        String outputKey = outputKeyMap.getOrDefault(previousAgentName, previousAgentName);
+        sb.append("【").append(outputKey).append("】")
           .append(allOutputs.get(previousAgentName));
         return sb.toString();
     }

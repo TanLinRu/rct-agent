@@ -11,19 +11,23 @@ public class AgentReflectionUtil {
         if (agent == null) return "unknown";
         String override = mockNames.get(agent);
         if (override != null) return override;
-        try {
-            Field[] fields = agent.getClass().getDeclaredFields();
-            for (Field field : fields) {
-                if ("name".equals(field.getName())) {
-                    field.setAccessible(true);
-                    Object value = field.get(agent);
-                    if (value instanceof String && !((String) value).isEmpty()) {
-                        return (String) value;
+        Class<?> clazz = agent.getClass();
+        while (clazz != null) {
+            try {
+                Field[] fields = clazz.getDeclaredFields();
+                for (Field field : fields) {
+                    if ("name".equals(field.getName())) {
+                        field.setAccessible(true);
+                        Object value = field.get(agent);
+                        if (value instanceof String && !((String) value).isEmpty()) {
+                            return (String) value;
+                        }
                     }
                 }
+            } catch (Exception e) {
+                log.debug("Failed to get agent name via reflection from {}: {}", clazz.getName(), e.getMessage());
             }
-        } catch (Exception e) {
-            log.debug("Failed to get agent name via reflection: {}", e.getMessage());
+            clazz = clazz.getSuperclass();
         }
         return "agent-" + agent.hashCode();
     }
