@@ -38,7 +38,7 @@ public class DynamicPromptAgent {
                             .chatOptions(ChatOptions.builder().build())
                             .model(chatModel)
                             .systemPrompt("你是一位专业的提示词工程师，擅长根据上下文生成优化的提示词。请根据用户的意图和上下文信息，生成一个针对性强、效果好的提示词。")
-                            .instruction("用户意图：{user_intent}\n请根据用户意图生成一个优化的提示词。")
+                            .instruction("请根据以下意图信息生成优化的提示词。")
                             .outputKey("generated_prompt")
                             .saver(new MemorySaver())
                             .interceptors(Arrays.asList(new ModelProcessInterceptor(), new ToolMonitoringInterceptor()))

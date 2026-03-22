@@ -58,7 +58,7 @@ public class CoordinatorAgentTest {
         AgentDataContext context = new AgentDataContext();
         Map<String, String> outputs = new LinkedHashMap<>();
         SequentialAgentExecutor.SequentialResult mockResult = new SequentialAgentExecutor.SequentialResult(
-                "mock_final_output", context, outputs);
+                "mock_final_output", context, outputs, "data_analysis_agent");
         when(sequentialAgentExecutor.execute(anyList(), anyString(), anyMap())).thenReturn(mockResult);
 
         // Execute

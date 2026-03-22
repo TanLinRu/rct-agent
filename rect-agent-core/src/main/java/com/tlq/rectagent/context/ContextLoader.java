@@ -2,8 +2,10 @@ package com.tlq.rectagent.context;
 
 import com.tlq.rectagent.data.entity.ChatMessage;
 import com.tlq.rectagent.data.entity.ChatSession;
+import com.tlq.rectagent.data.entity.ProfileChange;
 import com.tlq.rectagent.data.service.ChatMessageService;
 import com.tlq.rectagent.data.service.ChatSessionService;
+import com.tlq.rectagent.data.service.ProfileChangeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +21,7 @@ public class ContextLoader {
 
     private final ChatSessionService chatSessionService;
     private final ChatMessageService chatMessageService;
+    private final ProfileChangeService profileChangeService;
 
     @Value("${rectagent.context.l1.hot-turns:5}")
     private int l1HotTurns;
@@ -81,8 +84,15 @@ public class ContextLoader {
     }
 
     private List<String> extractProfileTags(String userId) {
-        List<String> tags = new ArrayList<>();
-        return tags;
+        List<ProfileChange> changes = profileChangeService.getChangesByUserId(userId);
+        Map<String, ProfileChange> latestByField = new LinkedHashMap<>();
+        for (ProfileChange change : changes) {
+            latestByField.putIfAbsent(change.getFieldName(), change);
+        }
+        return latestByField.values().stream()
+                .filter(c -> c.getNewValue() != null)
+                .map(c -> c.getFieldName() + ":" + c.getNewValue())
+                .collect(Collectors.toList());
     }
 
     private void checkAndRecoverFromCheckpoint(Context context) {

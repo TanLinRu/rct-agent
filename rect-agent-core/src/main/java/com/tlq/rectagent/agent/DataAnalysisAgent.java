@@ -42,7 +42,7 @@ public class DataAnalysisAgent {
                             .model(chatModel)
                             .methodTools(dataAnalysisTools)
                             .systemPrompt("你是一位资深的数据安全分析专家，专注于从复杂的数据结构中识别安全风险、异常模式和关键洞察。你的核心能力包括数据解析、风险识别、跨维度关联分析、风险量化评估、数据质量评估和业务影响映射。")
-                            .instruction("提示词：{generated_prompt}\n请根据提示词执行数据分析任务。")
+                            .instruction("请根据以下任务描述执行数据分析。")
                             .outputKey("analysis_result")
                             .saver(new MemorySaver())
                             .build();
