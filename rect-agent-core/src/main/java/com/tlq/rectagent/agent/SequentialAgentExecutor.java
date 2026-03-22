@@ -89,6 +89,13 @@ public class SequentialAgentExecutor {
         Map<String, String> agentOutputs = new java.util.LinkedHashMap<>();
         String lastAgentName = null;
 
+        for (ReactAgent agent : agents) {
+            String name = AgentReflectionUtil.getAgentName(agent);
+            if (!outputKeyMap.containsKey(name)) {
+                log.warn("Agent '{}' has no mapping in outputKeyMap, will use name as key", name);
+            }
+        }
+
         for (int i = 0; i < agents.size(); i++) {
             ReactAgent agent = agents.get(i);
             String agentName = AgentReflectionUtil.getAgentName(agent);

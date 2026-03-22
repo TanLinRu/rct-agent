@@ -1,7 +1,6 @@
 package com.tlq.rectagent.agent;
 
 import com.tlq.rectagent.context.ContextLoader;
-import com.tlq.rectagent.data.entity.ChatMessage;
 import com.tlq.rectagent.data.service.DataGovernanceService;
 import com.tlq.rectagent.profile.ProfileInferenceService;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +19,16 @@ import java.util.UUID;
 public class CoordinatorAgent {
 
     private static final String TRACE_ID_KEY = "traceId";
+
+    public record AgentResponse(
+            String content,
+            String sessionId,
+            String userId,
+            String intentResult,
+            String generatedPrompt,
+            String analysisResult,
+            Map<String, String> agentOutputs
+    ) {}
 
     @Autowired
     private IntentRecognitionAgent intentRecognitionAgent;
@@ -47,6 +56,11 @@ public class CoordinatorAgent {
     }
 
     public String processRequest(String userInput, String sessionId, String userId) {
+        AgentResponse response = processRequestWithMetadata(userInput, sessionId, userId);
+        return response.content();
+    }
+
+    public AgentResponse processRequestWithMetadata(String userInput, String sessionId, String userId) {
         String traceId = MDC.get(TRACE_ID_KEY);
         if (traceId == null) {
             traceId = "local-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
@@ -105,10 +119,17 @@ public class CoordinatorAgent {
                 }
             }
 
-            return finalOutput;
+            return new AgentResponse(
+                    finalOutput, sessionId, userId,
+                    agentOutputs.get("intent_recognition_agent"),
+                    agentOutputs.get("dynamic_prompt_agent"),
+                    agentOutputs.get("data_analysis_agent"),
+                    Map.copyOf(agentOutputs)
+            );
         } catch (Exception e) {
             log.error("[{}] 处理请求失败: {}", traceId, e.getMessage(), e);
-            return "处理请求失败: " + e.getMessage();
+            return new AgentResponse("处理请求失败: " + e.getMessage(), sessionId, userId,
+                    null, null, null, Map.of());
         }
     }
 

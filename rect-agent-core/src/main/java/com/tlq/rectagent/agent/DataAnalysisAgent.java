@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,6 +22,9 @@ public class DataAnalysisAgent {
 
     @Autowired
     private ChatModelFactory chatModelFactory;
+
+    @Value("${rectagent.prompts.data-analysis}")
+    private String systemPrompt;
 
     private ReactAgent agent;
     private DataAnalysisTools dataAnalysisTools;
@@ -35,13 +39,12 @@ public class DataAnalysisAgent {
                         dataAnalysisTools = new DataAnalysisTools();
                     }
 
-                    // 创建数据分析智能体
                     agent = ReactAgent.builder()
                             .name("data_analysis_agent")
                             .chatOptions(ChatOptions.builder().build())
                             .model(chatModel)
                             .methodTools(dataAnalysisTools)
-                            .systemPrompt("你是一位资深的数据安全分析专家，专注于从复杂的数据结构中识别安全风险、异常模式和关键洞察。你的核心能力包括数据解析、风险识别、跨维度关联分析、风险量化评估、数据质量评估和业务影响映射。")
+                            .systemPrompt(systemPrompt)
                             .instruction("请根据以下任务描述执行数据分析。")
                             .outputKey("analysis_result")
                             .saver(new MemorySaver())

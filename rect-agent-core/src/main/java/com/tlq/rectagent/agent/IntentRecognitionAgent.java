@@ -10,6 +10,7 @@ import com.tlq.rectagent.interceptor.ToolMonitoringInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -25,6 +26,9 @@ public class IntentRecognitionAgent {
     @Autowired
     private ChatModelFactory chatModelFactory;
 
+    @Value("${rectagent.prompts.intent-recognition}")
+    private String systemPrompt;
+
     private ReactAgent agent;
 
     public ReactAgent getAgent() {
@@ -33,12 +37,11 @@ public class IntentRecognitionAgent {
                 if (agent == null) {
                     ChatModel chatModel = chatModelFactory.getChatModel();
 
-                    // 创建意图识别智能体
                     agent = ReactAgent.builder()
                             .name("intent_recognition_agent")
                             .chatOptions(ChatOptions.builder().build())
                             .model(chatModel)
-                            .systemPrompt("你是一位专业的意图识别专家，擅长分析用户的查询意图。请仔细分析用户的输入，识别出用户的具体意图，并返回结构化的意图信息。输出格式：{\"intent\": \"...\", \"entities\": [...], \"confidence\": 0.95}")
+                            .systemPrompt(systemPrompt)
                             .outputKey("user_intent")
                             .saver(new MemorySaver())
                             .interceptors(Arrays.asList(new ModelProcessInterceptor(), new ToolMonitoringInterceptor()))

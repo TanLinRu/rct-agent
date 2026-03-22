@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -24,6 +25,9 @@ public class DynamicPromptAgent {
     @Autowired
     private ChatModelFactory chatModelFactory;
 
+    @Value("${rectagent.prompts.dynamic-prompt}")
+    private String systemPrompt;
+
     private ReactAgent agent;
 
     public ReactAgent getAgent() {
@@ -32,12 +36,11 @@ public class DynamicPromptAgent {
                 if (agent == null) {
                     ChatModel chatModel = chatModelFactory.getChatModel();
 
-                    // 创建动态提示词智能体
                     agent = ReactAgent.builder()
                             .name("dynamic_prompt_agent")
                             .chatOptions(ChatOptions.builder().build())
                             .model(chatModel)
-                            .systemPrompt("你是一位专业的提示词工程师，擅长根据上下文生成优化的提示词。请根据用户的意图和上下文信息，生成一个针对性强、效果好的提示词。")
+                            .systemPrompt(systemPrompt)
                             .instruction("请根据以下意图信息生成优化的提示词。")
                             .outputKey("generated_prompt")
                             .saver(new MemorySaver())
