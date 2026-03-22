@@ -1,0 +1,64 @@
+name: Multi-Model Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2-
+
+      - name: Build all modules (skip tests)
+        run: mvn -B -DskipTests package
+
+      - name: Run rect-agent-core tests
+        run: mvn -B -pl rect-agent-core -am test
+
+      - name: Run openclaw-java tests
+        run: mvn -B -pl openclaw-java -am test
+
+      - name: Run model integration tests
+        run: |
+          mvn -B -pl rect-agent-core -am test \
+            -Dtest="ModelRouterTest,ModelProviderFactoryTest,ModelRegistryTest,"\
+                   "DashScopeProviderIntegrationTest,OpenAIProviderIntegrationTest,"\
+                   "FallbackStrategyTest,AgentModelSelectorTest,SupervisorAgentTest"
+        continue-on-error: true
+
+  model-routing-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Run routing strategy tests
+        run: |
+          mvn -B -pl rect-agent-core test \
+            -Dtest="CostBasedStrategyTest,PriorityBasedStrategyTest,FallbackStrategyTest"

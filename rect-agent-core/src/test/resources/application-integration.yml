@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: rect-agent-test
+  ai:
+    dashscope:
+      enabled: false
+      api-key: ${DASHSCOPE_API_KEY:}
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL;CASE_INSENSITIVE_IDENTIFIERS=YES
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.tlq.rectagent.data.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+rectagent:
+  model:
+    routingStrategy: cost
+    providers:
+      - name: dashscope-primary
+        enabled: true
+        type: dashscope
+        model: qwen-turbo
+        apiKey: ${DASHSCOPE_API_KEY:${spring.ai.dashscope.api-key:}}
+        costPerToken: 0.001
+        priority: 1
+        capability: chat
+        mock: false
+        endpoints:
+          - https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation
+        maxRetries: 2
+        retryDelayMs: 500
+  context:
+    l1:
+      hot-turns: 5
+    l2:
+      warm-turns: 10
+  token:
+    max-input: 8000
+    max-output: 4000
+    window-keep: 2
+
+logging:
+  level:
+    com.tlq.rectagent: DEBUG
+    com.alibaba.cloud.ai: DEBUG

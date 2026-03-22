@@ -1,0 +1,11 @@
+=== 用户需求 ===
+总结文档内容
+
+=== 学习结果 ===
+{"intent": "general_query", "entities": [], "confidence": 0.95}
+
+=== 实现方案 ===
+{"intent": "general_query", "entities": [], "confidence": 0.95}
+
+=== 时间戳 ===
+2026-03-22T17:49:37.611708700
