@@ -70,6 +70,12 @@ public class CoordinatorAgent {
             traceId = "local-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
             MDC.put(TRACE_ID_KEY, traceId);
         }
+        if (sessionId != null) {
+            MDC.put("sessionId", sessionId);
+        }
+        if (userId != null) {
+            MDC.put("userId", userId);
+        }
         try {
             int inputLen = userInput != null ? userInput.length() : 0;
             log.info("[{}] 开始处理用户请求: 输入长度={}", traceId, inputLen);

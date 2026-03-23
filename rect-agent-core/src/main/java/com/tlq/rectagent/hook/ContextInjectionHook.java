@@ -8,6 +8,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.messages.MessagesModelHook;
 import com.alibaba.cloud.ai.graph.agent.hook.messages.UpdatePolicy;
 import com.tlq.rectagent.context.ContextLoader;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,9 @@ import java.util.List;
 @Slf4j
 @HookPositions({HookPosition.BEFORE_MODEL})
 public class ContextInjectionHook extends MessagesModelHook {
+
+    private static final String SESSION_ID_KEY = "sessionId";
+    private static final String USER_ID_KEY = "userId";
 
     @Autowired
     private ContextLoader contextLoader;
@@ -32,20 +36,20 @@ public class ContextInjectionHook extends MessagesModelHook {
 
     @Override
     public AgentCommand beforeModel(List<Message> previousMessages, RunnableConfig config) {
-        String traceId = config.context() != null
-                ? String.valueOf(config.context().getOrDefault("traceId", "unknown"))
-                : "unknown";
+        String traceId = MDC.get("traceId");
+        if (traceId == null) {
+            traceId = "unknown";
+        }
 
-        String sessionId = config.context() != null
-                ? String.valueOf(config.context().getOrDefault("sessionId", null))
-                : null;
-        String userId = config.context() != null
-                ? String.valueOf(config.context().getOrDefault("userId", null))
-                : null;
+        String sessionId = extractSessionId(config);
+        String userId = extractUserId(config);
 
         if (sessionId == null || userId == null || "null".equals(sessionId) || "null".equals(userId)) {
+            log.debug("[{}] ContextInjectionHook: 缺少 sessionId/userId，跳过上下文注入", traceId);
             return new AgentCommand(previousMessages);
         }
+
+        log.info("[{}] ContextInjectionHook: 加载上下文 sessionId={}, userId={}", traceId, sessionId, userId);
 
         try {
             ContextLoader.Context ctx = contextLoader.loadContext(sessionId, userId);
@@ -89,5 +93,31 @@ public class ContextInjectionHook extends MessagesModelHook {
             log.warn("[{}] 上下文注入失败，跳过: {}", traceId, e.getMessage());
             return new AgentCommand(previousMessages);
         }
+    }
+
+    private String extractFromContext(RunnableConfig config, String key) {
+        if (config != null && config.context() != null) {
+            Object value = config.context().get(key);
+            if (value != null) {
+                return String.valueOf(value);
+            }
+        }
+        return null;
+    }
+
+    private String extractSessionId(RunnableConfig config) {
+        String sessionId = extractFromContext(config, SESSION_ID_KEY);
+        if (sessionId == null) {
+            sessionId = MDC.get(SESSION_ID_KEY);
+        }
+        return sessionId;
+    }
+
+    private String extractUserId(RunnableConfig config) {
+        String userId = extractFromContext(config, USER_ID_KEY);
+        if (userId == null) {
+            userId = MDC.get(USER_ID_KEY);
+        }
+        return userId;
     }
 }

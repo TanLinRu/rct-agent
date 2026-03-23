@@ -7,7 +7,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.HookPositions;
 import com.alibaba.cloud.ai.graph.agent.hook.ModelHook;
 import com.tlq.rectagent.profile.ProfileInferenceService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.AssistantMessage;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
@@ -19,6 +19,8 @@ import java.util.concurrent.CompletableFuture;
 @HookPositions({HookPosition.AFTER_MODEL})
 public class ProfileInferenceHook extends ModelHook {
 
+    private static final String USER_ID_KEY = "userId";
+
     @Autowired
     private ProfileInferenceService profileInferenceService;
 
@@ -29,16 +31,18 @@ public class ProfileInferenceHook extends ModelHook {
 
     @Override
     public CompletableFuture<Map<String, Object>> afterModel(OverAllState state, RunnableConfig config) {
-        String traceId = config.context() != null
-                ? String.valueOf(config.context().getOrDefault("traceId", "unknown"))
-                : "unknown";
-        String userId = config.context() != null
-                ? String.valueOf(config.context().getOrDefault("userId", null))
-                : null;
+        String traceId = MDC.get("traceId");
+        if (traceId == null) {
+            traceId = "unknown";
+        }
 
+        String userId = extractUserId(config);
         if (userId == null || "null".equals(userId)) {
+            log.debug("[{}] ProfileInferenceHook: 缺少 userId，跳过画像推断", traceId);
             return CompletableFuture.completedFuture(Map.of());
         }
+
+        log.info("[{}] ProfileInferenceHook: 执行画像推断 userId={}", traceId, userId);
 
         try {
             String userInput = extractLatestUserMessage(state);
@@ -46,13 +50,33 @@ public class ProfileInferenceHook extends ModelHook {
 
             if (userInput != null && aiResponse != null) {
                 profileInferenceService.inferAndRecord(userId, userInput, aiResponse);
-                log.debug("[{}] 画像自动推断完成: userId={}", traceId, userId);
+                log.info("[{}] 画像自动推断完成: userId={}", traceId, userId);
+            } else {
+                log.debug("[{}] 画像推断: 未提取到有效消息对，跳过", traceId);
             }
         } catch (Exception e) {
             log.warn("[{}] 画像推断失败: {}", traceId, e.getMessage());
         }
 
         return CompletableFuture.completedFuture(Map.of());
+    }
+
+    private String extractFromContext(RunnableConfig config, String key) {
+        if (config != null && config.context() != null) {
+            Object value = config.context().get(key);
+            if (value != null) {
+                return String.valueOf(value);
+            }
+        }
+        return null;
+    }
+
+    private String extractUserId(RunnableConfig config) {
+        String userId = extractFromContext(config, USER_ID_KEY);
+        if (userId == null) {
+            userId = MDC.get(USER_ID_KEY);
+        }
+        return userId;
     }
 
     private String extractLatestUserMessage(OverAllState state) {
