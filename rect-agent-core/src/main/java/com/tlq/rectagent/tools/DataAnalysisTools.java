@@ -1,6 +1,5 @@
 package com.tlq.rectagent.tools;
 
-import com.tlq.rectagent.interceptor.ModelProcessInterceptor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -19,7 +18,7 @@ public class DataAnalysisTools {
             @ToolParam(description = "项目唯一标识") String gameId,
             @ToolParam(description = "数据查询开始时间") String startTime,
             @ToolParam(description = "数据查询结束时间") String endTime) {
-        return ModelProcessInterceptor.MOCK_DATA;
+        return "{\"gameId\":\"" + gameId + "\",\"startTime\":\"" + startTime + "\",\"endTime\":\"" + endTime + "\",\"data\":[{\"timestamp\":\"" + startTime + "\",\"value\":100}]}";
     }
 
     @Tool(description = "分析数据中的风险模式")
