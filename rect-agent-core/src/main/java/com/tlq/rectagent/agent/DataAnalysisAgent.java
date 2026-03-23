@@ -3,10 +3,10 @@ package com.tlq.rectagent.agent;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
-import com.tlq.rectagent.config.ChatModelFactory;
 import com.tlq.rectagent.hook.ContextInjectionHook;
 import com.tlq.rectagent.hook.HookConfiguration;
 import com.tlq.rectagent.hook.ProfileInferenceHook;
+import com.tlq.rectagent.model.router.AgentModelRouter;
 import com.tlq.rectagent.tools.DataAnalysisTools;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -17,17 +17,17 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
-/**
- * 数据分析智能体
- * 负责执行具体的数据分析任务
- */
 @Slf4j
 @Component
 public class DataAnalysisAgent {
 
+    public static final String AGENT_NAME = "data_analysis_agent";
+    public static final Set<String> REQUIRED_CAPABILITIES = Set.of("analysis");
+
     @Autowired
-    private ChatModelFactory chatModelFactory;
+    private AgentModelRouter agentModelRouter;
 
     @Value("${rectagent.prompts.data-analysis}")
     private String systemPrompt;
@@ -48,7 +48,10 @@ public class DataAnalysisAgent {
         if (agent == null) {
             synchronized (this) {
                 if (agent == null) {
-                    ChatModel chatModel = chatModelFactory.getChatModel();
+                    ChatModel chatModel = agentModelRouter.getChatModel(AGENT_NAME, REQUIRED_CAPABILITIES);
+                    if (chatModel == null) {
+                        throw new IllegalStateException("No available ChatModel for " + AGENT_NAME);
+                    }
 
                     if (dataAnalysisTools == null) {
                         dataAnalysisTools = new DataAnalysisTools();
@@ -60,7 +63,7 @@ public class DataAnalysisAgent {
                     allHooks.add(profileInferenceHook);
 
                     agent = ReactAgent.builder()
-                            .name("data_analysis_agent")
+                            .name(AGENT_NAME)
                             .chatOptions(ChatOptions.builder().build())
                             .model(chatModel)
                             .methodTools(dataAnalysisTools)
@@ -78,11 +81,6 @@ public class DataAnalysisAgent {
         return agent;
     }
 
-    /**
-     * 执行数据分析
-     * @param query 分析查询
-     * @return 分析结果
-     */
     public String analyzeData(String query) {
         try {
             ReactAgent agent = getAgent();

@@ -3,7 +3,7 @@ spring:
     name: rect-agent
   ai:
     dashscope:
-      enabled: true5
+      enabled: true
       api-key: ${DASHSCOPE_API_KEY:}
   datasource:
     url: jdbc:h2:mem:agentdb;DB_CLOSE_DELAY=-1;MODE=MySQL;CASE_INSENSITIVE_IDENTIFIERS=YES
@@ -41,48 +41,6 @@ rectagent:
     call-limit: 10
     max-tokens-before-summary: 4000
     messages-to-keep: 20
-  model:
-    routingStrategy: cost  # cost | priority
-    providers:
-      # DashScope：阿里云百炼，多端点容错
-      - name: dashscope-primary
-        enabled: true
-        type: dashscope
-        model: qwen-turbo
-        apiKey: ${DASHSCOPE_API_KEY:${spring.ai.dashscope.api-key:}}
-        costPerToken: 0.001
-        priority: 1
-        capability: chat
-        mock: false
-        endpoints:
-          - https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation
-        maxRetries: 2
-        retryDelayMs: 500
-      # OpenAI：官方 API，支持 endpoint 覆盖
-      - name: openai-gpt4
-        enabled: false
-        type: openai
-        model: gpt-4o-mini
-        apiKey: ${OPENAI_API_KEY:}
-        costPerToken: 0.002
-        priority: 2
-        capability: chat
-        mock: true
-        endpoint: https://api.openai.com/v1/chat/completions
-        maxRetries: 2
-        retryDelayMs: 500
-      # Anthropic：Claude 系列
-      - name: anthropic-claude
-        enabled: false
-        type: anthropic
-        model: claude-3-haiku
-        apiKey: ${ANTHROPIC_API_KEY:}
-        costPerToken: 0.003
-        priority: 3
-        capability: chat
-        mock: true
-        maxRetries: 2
-        retryDelayMs: 500
   context:
     l1:
       hot-turns: 5
@@ -92,6 +50,86 @@ rectagent:
     max-input: 8000
     max-output: 4000
     window-keep: 2
+
+  model:
+    default-model: dashscope-qwen-turbo
+    routing-strategy: cost
+
+    providers:
+      dashscope:
+        enabled: true
+        type: dashscope
+        base-url: https://dashscope.aliyuncs.com
+        api-key: ${DASHSCOPE_API_KEY:}
+        timeout: 30000
+        max-retries: 2
+      openai:
+        enabled: false
+        type: openai
+        base-url: https://api.openai.com/v1
+        api-key: ${OPENAI_API_KEY:}
+        timeout: 60000
+        max-retries: 3
+      anthropic:
+        enabled: false
+        type: anthropic
+        base-url: https://api.anthropic.com
+        api-key: ${ANTHROPIC_API_KEY:}
+        timeout: 60000
+        max-retries: 3
+
+    models:
+      dashscope-qwen-turbo:
+        provider: dashscope
+        model: qwen-turbo
+        cost-per-token: 0.001
+        priority: 1
+        capabilities: intent,prompt,chat
+      dashscope-qwen-plus:
+        provider: dashscope
+        model: qwen-plus
+        cost-per-token: 0.01
+        priority: 2
+        capabilities: analysis,reasoning
+      openai-gpt4o-mini:
+        provider: openai
+        model: gpt-4o-mini
+        cost-per-token: 0.002
+        priority: 3
+        capabilities: analysis,reasoning,chat
+      anthropic-haiku:
+        provider: anthropic
+        model: claude-3-haiku
+        cost-per-token: 0.003
+        priority: 4
+        capabilities: analysis,chat
+
+    agent-model-mapping:
+      intent_recognition_agent: dashscope-qwen-turbo
+      dynamic_prompt_agent: dashscope-qwen-turbo
+      data_analysis_agent: openai-gpt4o-mini
+
+    model-fallback-chains:
+      openai-gpt4o-mini: dashscope-qwen-turbo,dashscope-qwen-plus
+      anthropic-haiku: openai-gpt4o-mini,dashscope-qwen-turbo
+
+    circuit-breaker:
+      enabled: true
+      error-rate-threshold: 0.5
+      slow-call-duration-ms: 5000
+      slow-call-rate-threshold: 0.8
+      min-call-count: 10
+      wait-duration-in-open-ms: 30000
+
+    traffic-shifting:
+      enabled: false
+      rules:
+        - agent: data_analysis_agent
+          model: openai-gpt4o-mini
+          percentage: 10
+        - agent: data_analysis_agent
+          model: dashscope-qwen-turbo
+          percentage: 90
 
 server:
   port: 8080

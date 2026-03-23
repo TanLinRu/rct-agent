@@ -2,12 +2,12 @@ package com.tlq.rectagent.agent;
 
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
-import com.tlq.rectagent.config.ChatModelFactory;
 import com.tlq.rectagent.hook.ContextInjectionHook;
 import com.tlq.rectagent.hook.HookConfiguration;
 import com.tlq.rectagent.hook.ProfileInferenceHook;
 import com.tlq.rectagent.interceptor.ModelProcessInterceptor;
 import com.tlq.rectagent.interceptor.ToolMonitoringInterceptor;
+import com.tlq.rectagent.model.router.AgentModelRouter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -15,19 +15,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
-/**
- * 用户查询意图识别智能体
- * 负责分析用户输入，识别查询意图
- */
 @Slf4j
 @Component
 public class IntentRecognitionAgent {
 
+    public static final String AGENT_NAME = "intent_recognition_agent";
+    public static final Set<String> REQUIRED_CAPABILITIES = Set.of("intent");
+
     @Autowired
-    private ChatModelFactory chatModelFactory;
+    private AgentModelRouter agentModelRouter;
 
     @Value("${rectagent.prompts.intent-recognition}")
     private String systemPrompt;
@@ -47,15 +48,18 @@ public class IntentRecognitionAgent {
         if (agent == null) {
             synchronized (this) {
                 if (agent == null) {
-                    ChatModel chatModel = chatModelFactory.getChatModel();
+                    ChatModel chatModel = agentModelRouter.getChatModel(AGENT_NAME, REQUIRED_CAPABILITIES);
+                    if (chatModel == null) {
+                        throw new IllegalStateException("No available ChatModel for " + AGENT_NAME);
+                    }
 
-                    List<com.alibaba.cloud.ai.graph.agent.hook.Hook> allHooks = new java.util.ArrayList<>();
+                    List<com.alibaba.cloud.ai.graph.agent.hook.Hook> allHooks = new ArrayList<>();
                     allHooks.add(contextInjectionHook);
                     allHooks.addAll(hookConfiguration.getFrameworkHooks());
                     allHooks.add(profileInferenceHook);
 
                     agent = ReactAgent.builder()
-                            .name("intent_recognition_agent")
+                            .name(AGENT_NAME)
                             .chatOptions(ChatOptions.builder().build())
                             .model(chatModel)
                             .systemPrompt(systemPrompt)
@@ -73,11 +77,6 @@ public class IntentRecognitionAgent {
         return agent;
     }
 
-    /**
-     * 识别用户查询意图
-     * @param userInput 用户输入
-     * @return 意图识别结果
-     */
     public String recognizeIntent(String userInput) {
         ReactAgent agent = getAgent();
         try {
