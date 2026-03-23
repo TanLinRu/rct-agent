@@ -45,8 +45,10 @@ public class DataAnalysisAgent {
                             .model(chatModel)
                             .methodTools(dataAnalysisTools)
                             .systemPrompt(systemPrompt)
-                            .instruction("请根据以下任务描述执行数据分析。")
+                            .instruction("请根据以下任务描述执行数据分析：\n{generated_prompt}")
                             .outputKey("analysis_result")
+                            .includeContents(true)
+                            .returnReasoningContents(false)
                             .saver(new MemorySaver())
                             .build();
                 }

@@ -42,7 +42,10 @@ public class IntentRecognitionAgent {
                             .chatOptions(ChatOptions.builder().build())
                             .model(chatModel)
                             .systemPrompt(systemPrompt)
+                            .instruction("请分析以下用户输入，识别查询意图和实体：\n{input}")
                             .outputKey("user_intent")
+                            .includeContents(false)
+                            .returnReasoningContents(false)
                             .saver(new MemorySaver())
                             .interceptors(Arrays.asList(new ModelProcessInterceptor(), new ToolMonitoringInterceptor()))
                             .build();
