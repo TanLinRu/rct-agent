@@ -37,6 +37,10 @@ rectagent:
     intent-recognition: "你是一位专业的意图识别专家，擅长分析用户的查询意图。请仔细分析用户的输入，识别出用户的具体意图，并返回结构化的意图信息。输出格式：{\"intent\": \"...\", \"entities\": [...], \"confidence\": 0.95}"
     dynamic-prompt: "你是一位专业的提示词工程师，擅长根据上下文生成优化的提示词。请根据用户的意图和上下文信息，生成一个针对性强、效果好的提示词。"
     data-analysis: "你是一位资深的数据安全分析专家，专注于从复杂的数据结构中识别安全风险、异常模式和关键洞察。你的核心能力包括数据解析、风险识别、跨维度关联分析、风险量化评估、数据质量评估和业务影响映射。"
+  hook:
+    call-limit: 10
+    max-tokens-before-summary: 4000
+    messages-to-keep: 20
   model:
     routingStrategy: cost  # cost | priority
     providers:

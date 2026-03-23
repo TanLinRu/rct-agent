@@ -3,6 +3,9 @@ package com.tlq.rectagent.agent;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.tlq.rectagent.config.ChatModelFactory;
+import com.tlq.rectagent.hook.ContextInjectionHook;
+import com.tlq.rectagent.hook.HookConfiguration;
+import com.tlq.rectagent.hook.ProfileInferenceHook;
 import com.tlq.rectagent.interceptor.ModelProcessInterceptor;
 import com.tlq.rectagent.interceptor.ToolMonitoringInterceptor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * 动态提示词智能体
@@ -28,6 +33,15 @@ public class DynamicPromptAgent {
     @Value("${rectagent.prompts.dynamic-prompt}")
     private String systemPrompt;
 
+    @Autowired
+    private HookConfiguration hookConfiguration;
+
+    @Autowired
+    private ContextInjectionHook contextInjectionHook;
+
+    @Autowired
+    private ProfileInferenceHook profileInferenceHook;
+
     private ReactAgent agent;
 
     public ReactAgent getAgent() {
@@ -35,6 +49,11 @@ public class DynamicPromptAgent {
             synchronized (this) {
                 if (agent == null) {
                     ChatModel chatModel = chatModelFactory.getChatModel();
+
+                    List<com.alibaba.cloud.ai.graph.agent.hook.Hook> allHooks = new ArrayList<>();
+                    allHooks.add(contextInjectionHook);
+                    allHooks.addAll(hookConfiguration.getFrameworkHooks());
+                    allHooks.add(profileInferenceHook);
 
                     agent = ReactAgent.builder()
                             .name("dynamic_prompt_agent")
@@ -46,6 +65,7 @@ public class DynamicPromptAgent {
                             .includeContents(true)
                             .returnReasoningContents(false)
                             .saver(new MemorySaver())
+                            .hooks(allHooks)
                             .interceptors(Arrays.asList(new ModelProcessInterceptor(), new ToolMonitoringInterceptor()))
                             .build();
                 }

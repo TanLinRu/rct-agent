@@ -4,6 +4,9 @@ import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.tlq.rectagent.config.ChatModelFactory;
+import com.tlq.rectagent.hook.ContextInjectionHook;
+import com.tlq.rectagent.hook.HookConfiguration;
+import com.tlq.rectagent.hook.ProfileInferenceHook;
 import com.tlq.rectagent.tools.DataAnalysisTools;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -11,6 +14,9 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 数据分析智能体
@@ -26,6 +32,15 @@ public class DataAnalysisAgent {
     @Value("${rectagent.prompts.data-analysis}")
     private String systemPrompt;
 
+    @Autowired
+    private HookConfiguration hookConfiguration;
+
+    @Autowired
+    private ContextInjectionHook contextInjectionHook;
+
+    @Autowired
+    private ProfileInferenceHook profileInferenceHook;
+
     private ReactAgent agent;
     private DataAnalysisTools dataAnalysisTools;
 
@@ -39,6 +54,11 @@ public class DataAnalysisAgent {
                         dataAnalysisTools = new DataAnalysisTools();
                     }
 
+                    List<com.alibaba.cloud.ai.graph.agent.hook.Hook> allHooks = new ArrayList<>();
+                    allHooks.add(contextInjectionHook);
+                    allHooks.addAll(hookConfiguration.getFrameworkHooks());
+                    allHooks.add(profileInferenceHook);
+
                     agent = ReactAgent.builder()
                             .name("data_analysis_agent")
                             .chatOptions(ChatOptions.builder().build())
@@ -50,6 +70,7 @@ public class DataAnalysisAgent {
                             .includeContents(true)
                             .returnReasoningContents(false)
                             .saver(new MemorySaver())
+                            .hooks(allHooks)
                             .build();
                 }
             }

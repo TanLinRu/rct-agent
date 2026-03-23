@@ -1,19 +1,22 @@
 package com.tlq.rectagent.agent;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.tlq.rectagent.config.ChatModelFactory;
-import org.springframework.ai.chat.model.ChatModel;
+import com.tlq.rectagent.hook.ContextInjectionHook;
+import com.tlq.rectagent.hook.HookConfiguration;
+import com.tlq.rectagent.hook.ProfileInferenceHook;
 import com.tlq.rectagent.interceptor.ModelProcessInterceptor;
 import com.tlq.rectagent.interceptor.ToolMonitoringInterceptor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * 用户查询意图识别智能体
@@ -29,6 +32,15 @@ public class IntentRecognitionAgent {
     @Value("${rectagent.prompts.intent-recognition}")
     private String systemPrompt;
 
+    @Autowired
+    private HookConfiguration hookConfiguration;
+
+    @Autowired
+    private ContextInjectionHook contextInjectionHook;
+
+    @Autowired
+    private ProfileInferenceHook profileInferenceHook;
+
     private ReactAgent agent;
 
     public ReactAgent getAgent() {
@@ -36,6 +48,11 @@ public class IntentRecognitionAgent {
             synchronized (this) {
                 if (agent == null) {
                     ChatModel chatModel = chatModelFactory.getChatModel();
+
+                    List<com.alibaba.cloud.ai.graph.agent.hook.Hook> allHooks = new java.util.ArrayList<>();
+                    allHooks.add(contextInjectionHook);
+                    allHooks.addAll(hookConfiguration.getFrameworkHooks());
+                    allHooks.add(profileInferenceHook);
 
                     agent = ReactAgent.builder()
                             .name("intent_recognition_agent")
@@ -47,6 +64,7 @@ public class IntentRecognitionAgent {
                             .includeContents(false)
                             .returnReasoningContents(false)
                             .saver(new MemorySaver())
+                            .hooks(allHooks)
                             .interceptors(Arrays.asList(new ModelProcessInterceptor(), new ToolMonitoringInterceptor()))
                             .build();
                 }

@@ -6,8 +6,6 @@ import com.tlq.rectagent.communication.AgentCommunicationManager;
 import com.tlq.rectagent.context.*;
 import com.tlq.rectagent.data.entity.*;
 import com.tlq.rectagent.data.service.*;
-import com.tlq.rectagent.interceptor.ModelProcessInterceptor;
-import com.tlq.rectagent.interceptor.ToolMonitoringInterceptor;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -101,7 +99,7 @@ public class FullSystemE2ETest {
         System.out.println("[TRACE=" + traceId + "] 第4段: 工具执行开始 tool=getDataByGameId");
 
         Thread.sleep(50);
-        String mockToolResult = ModelProcessInterceptor.MOCK_DATA;
+        String mockToolResult = "{\"gameId\":\"test\",\"startTime\":\"2026-01-01\",\"endTime\":\"2026-02-01\",\"data\":[{\"timestamp\":\"2026-01-01\",\"value\":100}]}";
         dataGovernanceService.completeToolExecution(toolExec.getExecutionId(), mockToolResult, 50);
         ToolExecution savedExec = toolExecutionService.getById(toolExec.getExecutionId());
         assertEquals("SUCCESS", savedExec.getStatus());
