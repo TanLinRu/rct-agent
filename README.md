@@ -404,54 +404,168 @@ scripts\self_check.bat
 
 ### 配置
 
-在 `application.yml` 中配置多模型路由：
+在 `application.yml` 中配置多模型路由，支持 Provider + Model 两层配置：
+
+#### 1. Provider 配置（提供商层）
+
+```yaml
+spring:
+  ai:
+    dashscope:
+      enabled: true
+      api-key: ${DASHSCOPE_API_KEY:}
+
+rectagent:
+  model:
+    default-model: dashscope-qwen-turbo
+    routing-strategy: cost  # cost | priority
+
+    # Provider 配置（提供商）
+    providers:
+      dashscope:           # 阿里云百炼
+        enabled: true
+        type: dashscope
+        base-url: https://dashscope.aliyuncs.com
+        api-key: ${DASHSCOPE_API_KEY:}
+        timeout: 30000
+        max-retries: 2
+
+      openai:              # OpenAI 官方
+        enabled: true
+        type: openai
+        base-url: https://api.openai.com/v1
+        api-key: ${OPENAI_API_KEY:}
+        timeout: 60000
+        max-retries: 3
+
+      anthropic:           # Anthropic
+        enabled: false
+        type: anthropic
+        base-url: https://api.anthropic.com
+        api-key: ${ANTHROPIC_API_KEY:}
+        timeout: 60000
+        max-retries: 3
+```
+
+#### 2. Model 配置（模型实例层）
 
 ```yaml
 rectagent:
   model:
-    routingStrategy: cost  # cost | priority（默认 cost）
-    providers:
-      # DashScope：阿里云百炼，多端点容错
-      - name: dashscope-primary
-        enabled: true
-        type: dashscope
+    # 模型实例配置
+    models:
+      dashscope-qwen-turbo:      # 阿里云低成本模型
+        provider: dashscope
         model: qwen-turbo
-        apiKey: ${DASHSCOPE_API_KEY:}
-        costPerToken: 0.001
+        cost-per-token: 0.001
         priority: 1
-        capability: chat
-        mock: false
-        endpoints:
-          - https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation
-        maxRetries: 2
-        retryDelayMs: 500
+        capabilities: intent,prompt,chat
 
-      # OpenAI：官方 API，支持 endpoint 覆盖
-      - name: openai-gpt4
-        enabled: true
-        type: openai
-        model: gpt-4o-mini
-        apiKey: ${OPENAI_API_KEY:}
-        costPerToken: 0.002
+      dashscope-qwen-plus:       # 阿里云高性能模型
+        provider: dashscope
+        model: qwen-plus
+        cost-per-token: 0.01
         priority: 2
-        capability: chat
-        mock: false
-        endpoint: https://api.openai.com/v1/chat/completions
-        maxRetries: 2
-        retryDelayMs: 500
+        capabilities: analysis,reasoning
 
-      # Anthropic：Claude 系列
-      - name: anthropic-claude
-        enabled: false
-        type: anthropic
-        model: claude-3-haiku
-        apiKey: ${ANTHROPIC_API_KEY:}
-        costPerToken: 0.003
+      openai-gpt4o-mini:         # OpenAI 模型
+        provider: openai
+        model: gpt-4o-mini
+        cost-per-token: 0.002
         priority: 3
-        capability: chat
-        mock: false
-        maxRetries: 2
-        retryDelayMs: 500
+        capabilities: analysis,reasoning,chat
+
+      anthropic-haiku:           # Anthropic 模型
+        provider: anthropic
+        model: claude-3-haiku
+        cost-per-token: 0.003
+        priority: 4
+        capabilities: analysis,chat
+```
+
+#### 3. Agent → Model 映射
+
+```yaml
+rectagent:
+  model:
+    # Agent 类型到模型的映射
+    agent-model-mapping:
+      intent_recognition_agent: dashscope-qwen-turbo
+      dynamic_prompt_agent: dashscope-qwen-turbo
+      data_analysis_agent: openai-gpt4o-mini
+```
+
+#### 4. 降级链配置
+
+```yaml
+rectagent:
+  model:
+    # 模型降级链：主模型失败时按顺序降级
+    model-fallback-chains:
+      openai-gpt4o-mini: dashscope-qwen-turbo,dashscope-qwen-plus
+      anthropic-haiku: openai-gpt4o-mini,dashscope-qwen-turbo
+```
+
+#### 5. 熔断器配置
+
+```yaml
+rectagent:
+  model:
+    circuit-breaker:
+      enabled: true
+      error-rate-threshold: 0.5      # 50% 错误率触发熔断
+      slow-call-duration-ms: 5000    # 5s 慢调用阈值
+      slow-call-rate-threshold: 0.8  # 80% 慢调用率触发熔断
+      min-call-count: 10             # 最少调用次数
+      wait-duration-in-open-ms: 30000  # 熔断持续 30s
+```
+
+#### 6. 灰度发布配置
+
+```yaml
+rectagent:
+  model:
+    traffic-shifting:
+      enabled: false
+      rules:
+        - agent: data_analysis_agent
+          model: openai-gpt4o-mini
+          percentage: 10     # 10% 流量切到新模型
+        - agent: data_analysis_agent
+          model: dashscope-qwen-turbo
+          percentage: 90
+```
+
+#### 配置架构图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        rectagent.model                          │
+├─────────────────────────────────────────────────────────────────┤
+│  default-model: dashscope-qwen-turbo    # 默认模型               │
+│  routing-strategy: cost                # 路由策略                │
+├─────────────────────────────────────────────────────────────────┤
+│  providers:  (提供商层)                                        │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ dashscope ──▶ base-url, api-key, timeout, max-retries      ││
+│  │ openai    ──▶ base-url, api-key, timeout, max-retries      ││
+│  │ anthropic ──▶ base-url, api-key, timeout, max-retries      ││
+│  └─────────────────────────────────────────────────────────────┘│
+├─────────────────────────────────────────────────────────────────┤
+│  models:  (模型实例层)                                          │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ dashscope-qwen-turbo ──▶ provider: dashscope, cost: 0.001  ││
+│  │ dashscope-qwen-plus  ──▶ provider: dashscope, cost: 0.01  ││
+│  │ openai-gpt4o-mini    ──▶ provider: openai,    cost: 0.002  ││
+│  └─────────────────────────────────────────────────────────────┘│
+├─────────────────────────────────────────────────────────────────┤
+│  agent-model-mapping:  (Agent → Model 映射)                     │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ intent_recognition_agent ──▶ dashscope-qwen-turbo         ││
+│  │ dynamic_prompt_agent     ──▶ dashscope-qwen-turbo         ││
+│  │ data_analysis_agent      ──▶ openai-gpt4o-mini           ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### 使用示例
