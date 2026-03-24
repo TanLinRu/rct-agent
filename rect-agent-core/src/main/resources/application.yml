@@ -41,6 +41,13 @@ rectagent:
     call-limit: 10
     max-tokens-before-summary: 4000
     messages-to-keep: 20
+    compression:
+      enabled: false
+      threshold-ratio: 0.7
+      keep-recent: 5
+      preserve-tool-calls: true
+      max-summary-tokens: 1000
+      strategy: incremental
   context:
     l1:
       hot-turns: 5

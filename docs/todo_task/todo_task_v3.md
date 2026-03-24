@@ -1130,8 +1130,231 @@ rectagent:
 
 ---
 
-**文档版本**：v3.9
-**创建时间**：2026-03-21
-**最后更新**：2026-03-22
-**状态**：P0完成，P1大部分完成（P4跳过），P2骨架完成（~50%），P3全部完成（~100%）
+## 十一、SupervisorAgent 完整实现 + 增量压缩 Hook（v4 规划）
+
+> **版本**：v4.0
+> **更新时间**：2026-03-24
+> **参考文档**：
+> - [SupervisorAgent 官方文档](https://java2ai.com/docs/frameworks/agent-framework/advanced/multi-agent#%E7%9B%91%E7%9D%A3%E8%80%85supervisoragent)
+> - [OpenClaw Context 压缩方案](https://github.com/openclaw/openclaw)
+
+### 11.1 SupervisorAgent 完整实现
+
+#### 11.1.1 目标
+
+使用框架 `com.alibaba.cloud.ai.graph.agent.flow.agent.SupervisorAgent` 实现完整版，支持：
+- 自定义 `systemPrompt` + `instruction`
+- 循环调用防护（禁止连续两次调用同一Agent）
+- 异常边界管控（超时处理、降级策略、最大重试次数）
+
+#### 11.1.2 实现方案
+
+**文件**：`rect-agent-core/src/main/java/com/tlq/rectagent/agent/SupervisorAgent.java`
+
+```java
+// SupervisorAgent 核心提示词
+final String SUPERVISOR_SYSTEM_PROMPT = """
+你是一个智能的任务监督者，负责协调多个专业子Agent完成用户需求。
+
+## 你的职责
+1. 分析用户需求，选择合适的子Agent
+2. 监控执行结果
+3. 决定是否继续或结束任务
+
+## 可用子Agent
+- intent_recognition_agent: 意图识别
+- dynamic_prompt_agent: 动态提示词生成  
+- data_analysis_agent: 数据分析
+
+## 决策规则
+1. 单一任务：选择最合适的Agent执行
+2. 多步骤任务：分步执行，每步等待完成后决定下一步
+3. 任务完成：返回FINISH
+
+## 重要约束（强制）
+- 禁止连续两次调用同一个Agent
+- 单次任务最多调用3个Agent
+- 遇到错误重试1次后必须返回FINISH或降级处理
+- 仅返回Agent名称或FINISH，不要包含其他解释
+""";
+```
+
+#### 11.1.3 关键约束
+
+| 约束项 | 规则 | 说明 |
+|-------|------|------|
+| 禁止重复调用 | `calledAgents` 集合 | 同一Agent不可连续调用超过1次 |
+| 最大调用次数 | `maxAgentCalls = 3` | 单次任务最多调用3个Agent |
+| 错误重试 | `maxRetries = 1` | 遇到错误重试1次后必须返回 |
+| 响应格式 | 仅返回Agent名称或FINISH | 不包含其他解释 |
+
+---
+
+### 11.2 增量压缩 Hook 实现
+
+#### 11.2.1 目标
+
+参考 OpenClaw 实现增量压缩（非等到 limit 才压缩），通过 Hook 方式配置：
+- **增量压缩**：每轮完成后立即压缩，非等到 limit
+- **语义保留**：保留所有 tool_calls、关键决策点
+- **溢出处理**：超过 maxTokens 时生成 UserMessage 填充
+
+#### 11.2.2 OpenClaw 核心策略
+
+| 策略 | 说明 |
+|-----|------|
+| **增量压缩** | 每轮完成后压缩已完成的消息 |
+| **Sealed Flag** | 压缩后标记，避免重复压缩 |
+| **Deprecated Flag** | 过时信息标记，可 reactivate |
+| **Token 预估算** | 发送前预估，超阈值先压缩 |
+
+#### 11.2.3 实现方案
+
+**新建文件**：`rect-agent-core/src/main/java/com/tlq/rectagent/hook/IncrementalCompressionHook.java`
+
+```java
+@HookPositions({HookPosition.BEFORE_MODEL, HookPosition.AFTER_MODEL})
+public class IncrementalCompressionHook extends MessagesModelHook {
+
+    @Value("${rectagent.hook.compression.enabled:true}")
+    private boolean enabled;
+    
+    @Value("${rectagent.hook.compression.threshold-ratio:0.7}")
+    private double thresholdRatio;  // 70% 阈值触发
+    
+    @Value("${rectagent.hook.compression.keep-recent:5}")
+    private int keepRecent;  // 保留最近N条
+    
+    @Value("${rectagent.hook.compression.preserve-tool-calls:true}")
+    private boolean preserveToolCalls;  // 保留工具调用
+    
+    @Value("${rectagent.hook.compression.max-summary-tokens:1000}")
+    private int maxSummaryTokens;
+
+    @Override
+    public AgentCommand beforeModel(List<Message> messages, RunnableConfig config) {
+        // 1. 估算当前 token
+        int currentTokens = estimateTokens(messages);
+        
+        // 2. 超过阈值触发增量压缩
+        if (currentTokens > maxInputTokens * thresholdRatio) {
+            return compressAndReturn(messages);
+        }
+        
+        return new AgentCommand(messages);
+    }
+
+    @Override  
+    public AgentCommand afterModel(List<Message> messages, AgentResponse response, RunnableConfig config) {
+        // 每轮完成后检查是否需要增量压缩
+        // 避免等到 limit 才压缩
+        int currentTokens = estimateTokens(messages);
+        
+        if (currentTokens > maxInputTokens * thresholdRatio) {
+            return compressAndReturn(messages);
+        }
+        
+        return new AgentCommand(messages);
+    }
+}
+```
+
+---
+
+### 11.3 配置文件更新
+
+**文件**：`rect-agent-core/src/main/resources/application.yml`
+
+```yaml
+rectagent:
+  hook:
+    compression:
+      enabled: true
+      threshold-ratio: 0.7    # 70% 触发压缩
+      keep-recent: 5          # 保留最近5条
+      preserve-tool-calls: true
+      max-summary-tokens: 1000
+      strategy: incremental    # incremental | aggressive | hybrid
+```
+
+---
+
+### 11.4 HookConfiguration 增强
+
+**修改**：`rect-agent-core/src/main/java/com/tlq/rectagent/hook/HookConfiguration.java`
+
+```java
+@Autowired
+private IncrementalCompressionHook incrementalCompressionHook;
+
+@Value("${rectagent.hook.compression.enabled:false}")
+private boolean compressionEnabled;
+
+public List<com.alibaba.cloud.ai.graph.agent.hook.Hook> getFrameworkHooks() {
+    List<com.alibaba.cloud.ai.graph.agent.hook.Hook> hooks = new ArrayList<>();
+    hooks.add(summarizationHook);
+    hooks.add(modelCallLimitHook);
+    
+    if (compressionEnabled) {
+        hooks.add(incrementalCompressionHook);
+    }
+    
+    return hooks;
+}
+```
+
+---
+
+### 11.5 溢出 UserMessage 生成
+
+**修改**：`rect-agent-core/src/main/java/com/tlq/rectagent/agent/MessageOptimizationAgent.java`
+
+```java
+public UserMessage generateOverflowMessage(
+        List<Message> messages, 
+        int maxTokens) {
+    
+    // 1. 估算当前 token
+    // 2. 超过阈值，触发压缩
+    // 3. 生成填充消息
+    
+    return new UserMessage(
+        "[上下文压缩]\n" +
+        "- 保留最近 " + keepRecent + " 条消息\n" +
+        "- 保留所有工具调用\n" +
+        "- 历史摘要: " + summary + "\n" +
+        "- 原始消息数: " + originalCount
+    );
+}
+```
+
+---
+
+### 11.6 任务清单
+
+| 任务ID | 任务说明 | 文件 | 状态 |
+|-------|---------|------|------|
+| T-V4-1 | SupervisorAgent 完整实现（框架版+防护） | `SupervisorAgent.java` | 📋 待开始 |
+| T-V4-2 | 创建增量压缩 Hook | `IncrementalCompressionHook.java` | 📋 待开始 |
+| T-V4-3 | HookConfiguration 增强 | `HookConfiguration.java` | 📋 待开始 |
+| T-V4-4 | 溢出 UserMessage 改造 | `MessageOptimizationAgent.java` | 📋 待开始 |
+| T-V4-5 | 配置文件更新 | `application.yml` | 📋 待开始 |
+| T-V4-6 | 单元测试 | `IncrementalCompressionHookTest.java` | 📋 待开始 |
+
+---
+
+### 11.7 预期效果
+
+| 指标 | 实现前 | 实现后 |
+|-----|-------|-------|
+| 压缩触发时机 | 达到 limit 才压缩 | 达到 70% 阈值即压缩 |
+| Token 节省 | ~30% | 40-60% |
+| 消息语义保留 | 部分丢失 | tool_calls + 关键决策完整保留 |
+| 压缩方式 | 一次性压缩 | 增量压缩（每轮后） |
+
+---
+
+**文档版本**：v4.0
+**创建时间**：2026-03-24
+**状态**：规划中
 **负责人**：待定

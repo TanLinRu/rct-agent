@@ -1,5 +1,6 @@
 package com.tlq.rectagent.hook;
 
+import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.hook.modelcalllimit.ModelCallLimitHook;
 import com.alibaba.cloud.ai.graph.agent.hook.summarization.SummarizationHook;
 import com.tlq.rectagent.config.ChatModelFactory;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 import jakarta.annotation.PostConstruct;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -19,6 +21,9 @@ public class HookConfiguration {
     @Autowired
     private ChatModelFactory chatModelFactory;
 
+    @Autowired(required = false)
+    private IncrementalCompressionHook incrementalCompressionHook;
+
     @Value("${rectagent.hook.call-limit:10}")
     private int callLimit;
 
@@ -27,6 +32,9 @@ public class HookConfiguration {
 
     @Value("${rectagent.hook.messages-to-keep:20}")
     private int messagesToKeep;
+
+    @Value("${rectagent.hook.compression.enabled:false}")
+    private boolean compressionEnabled;
 
     private SummarizationHook summarizationHook;
 
@@ -48,10 +56,27 @@ public class HookConfiguration {
                 .runLimit(callLimit)
                 .build();
         log.info("ModelCallLimitHook initialized: runLimit={}", callLimit);
+
+        if (compressionEnabled && incrementalCompressionHook != null) {
+            log.info("IncrementalCompressionHook enabled: thresholdRatio={}, keepRecent={}",
+                    incrementalCompressionHook.getThresholdRatio(),
+                    incrementalCompressionHook.getKeepRecent());
+        } else if (compressionEnabled) {
+            log.warn("compression.enabled=true but IncrementalCompressionHook not found");
+        }
     }
 
-    public List<com.alibaba.cloud.ai.graph.agent.hook.Hook> getFrameworkHooks() {
-        return List.of(summarizationHook, modelCallLimitHook);
+    public List<Hook> getFrameworkHooks() {
+        List<Hook> hooks = new ArrayList<>();
+        hooks.add(summarizationHook);
+        hooks.add(modelCallLimitHook);
+
+        if (compressionEnabled && incrementalCompressionHook != null) {
+            hooks.add(incrementalCompressionHook);
+            log.info("Added IncrementalCompressionHook to framework hooks");
+        }
+
+        return hooks;
     }
 
     public SummarizationHook getSummarizationHook() {
@@ -60,5 +85,13 @@ public class HookConfiguration {
 
     public ModelCallLimitHook getModelCallLimitHook() {
         return modelCallLimitHook;
+    }
+
+    public IncrementalCompressionHook getIncrementalCompressionHook() {
+        return incrementalCompressionHook;
+    }
+
+    public boolean isCompressionEnabled() {
+        return compressionEnabled;
     }
 }
