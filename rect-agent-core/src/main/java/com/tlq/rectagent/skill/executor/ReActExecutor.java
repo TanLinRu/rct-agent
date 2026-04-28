@@ -2,10 +2,10 @@ package com.tlq.rectagent.skill.executor;
 
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 
-public class DashScopeExecutor implements RequirementExecutor {
+public class ReActExecutor implements RequirementExecutor {
     private final ReactAgent executorAgent;
 
-    public DashScopeExecutor(ReactAgent executorAgent) {
+    public ReActExecutor(ReactAgent executorAgent) {
         this.executorAgent = executorAgent;
     }
 

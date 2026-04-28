@@ -11,14 +11,48 @@ import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 public class MockChatModel implements ChatModel {
 
+    private final AtomicInteger callCount = new AtomicInteger(0);
+
     @Override
     public String call(String text) {
         log.debug("[MockChatModel] call: {}", text);
-        return "{\"intent\": \"general_query\", \"entities\": [], \"confidence\": 0.95}";
+
+        int count = callCount.getAndIncrement();
+
+        if (text.contains("FINISH") || (count >= 3)) {
+            return "[\"FINISH\"]";
+        }
+
+        if (text.contains("intent_recognition_agent") || text.contains("识别意图")) {
+            return "[\"data_analysis_agent\"]";
+        }
+
+        if (text.contains("data_analysis_agent") || text.contains("数据分析")) {
+            return "[\"risk_assessment_agent\"]";
+        }
+
+        if (text.contains("risk_assessment_agent") || text.contains("风险评估")) {
+            return "[\"FINISH\"]";
+        }
+
+        if (text.contains("请分析用户输入") || text.contains("决定调用哪个Agent")) {
+            return "[\"intent_recognition_agent\"]";
+        }
+
+        if (count == 0) {
+            return "[\"intent_recognition_agent\"]";
+        } else if (count == 1) {
+            return "[\"data_analysis_agent\"]";
+        } else if (count == 2) {
+            return "[\"risk_assessment_agent\"]";
+        } else {
+            return "[\"FINISH\"]";
+        }
     }
 
     @Override

@@ -17,8 +17,11 @@ public class PriorityRoutingStrategy {
 
     public static final String NAME = "priority";
 
-    @Autowired
     private ChatModelPool modelPool;
+
+    public void setModelPool(ChatModelPool modelPool) {
+        this.modelPool = modelPool;
+    }
 
     public String getName() {
         return NAME;

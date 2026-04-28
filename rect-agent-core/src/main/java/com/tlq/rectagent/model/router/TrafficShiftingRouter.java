@@ -5,7 +5,6 @@ import com.tlq.rectagent.model.pool.ChatModelPool;
 import com.tlq.rectagent.model.pool.ModelInstance;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -17,8 +16,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 public class TrafficShiftingRouter {
 
-    @Autowired
     private ChatModelPool modelPool;
+
+    public void setModelPool(ChatModelPool modelPool) {
+        this.modelPool = modelPool;
+    }
 
     private final Map<String, List<TrafficShiftingRule>> rules = new ConcurrentHashMap<>();
     private final AtomicInteger requestCounter = new AtomicInteger(0);

@@ -3,7 +3,7 @@ package com.tlq.rectagent.model.circuit;
 import com.tlq.rectagent.model.pool.ChatModelPool;
 import com.tlq.rectagent.model.pool.ModelInstance;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -14,8 +14,11 @@ import java.util.Optional;
 @Component
 public class CircuitBreakerManager {
 
-    @Autowired
     private ChatModelPool modelPool;
+
+    public void setModelPool(ChatModelPool modelPool) {
+        this.modelPool = modelPool;
+    }
 
     public CircuitBreaker getBreaker(String modelName) {
         Optional<ModelInstance> instance = modelPool.get(modelName);

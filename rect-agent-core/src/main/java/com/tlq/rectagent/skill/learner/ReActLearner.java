@@ -4,10 +4,10 @@ import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 
 import java.util.List;
 
-public class DashScopeLearner implements LMLearner {
+public class ReActLearner implements LMLearner {
     private final ReactAgent learnerAgent;
 
-    public DashScopeLearner(ReactAgent learnerAgent) {
+    public ReActLearner(ReactAgent learnerAgent) {
         this.learnerAgent = learnerAgent;
     }
 

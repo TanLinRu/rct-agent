@@ -7,18 +7,6 @@ import java.util.List;
 
 public class ModelProviderFactoryTest {
     @Test
-    public void createsDashScopeProviderFromConfig() {
-        ModelProviderConfig cfg = new ModelProviderConfig();
-        cfg.setName("dash");
-        cfg.setEnabled(true);
-        cfg.setType("dashscope");
-        cfg.setModel("default");
-        cfg.setCostPerToken(0.1);
-        ModelProvider p = ModelProviderFactory.createFromConfig(cfg);
-        assertTrue(p instanceof DashScopeProvider);
-    }
-
-    @Test
     public void createsOpenAIProviderFromConfig() {
         ModelProviderConfig cfg = new ModelProviderConfig();
         cfg.setName("openai");
@@ -28,5 +16,17 @@ public class ModelProviderFactoryTest {
         cfg.setCostPerToken(0.2);
         ModelProvider p = ModelProviderFactory.createFromConfig(cfg);
         assertTrue(p instanceof OpenAIProvider);
+    }
+
+    @Test
+    public void createsAnthropicProviderFromConfig() {
+        ModelProviderConfig cfg = new ModelProviderConfig();
+        cfg.setName("anthropic");
+        cfg.setEnabled(true);
+        cfg.setType("anthropic");
+        cfg.setModel("claude-3");
+        cfg.setCostPerToken(0.3);
+        ModelProvider p = ModelProviderFactory.createFromConfig(cfg);
+        assertTrue(p instanceof AnthropicProvider);
     }
 }

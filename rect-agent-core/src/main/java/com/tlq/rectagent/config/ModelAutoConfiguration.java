@@ -7,6 +7,7 @@ import com.tlq.rectagent.model.router.TrafficShiftingRouter;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,16 +24,7 @@ public class ModelAutoConfiguration {
     @Autowired(required = false)
     private ModelConfigProperties config;
 
-    @Autowired
-    private ChatModelPool chatModelPool;
-
-    @Autowired
     private AgentModelRouter agentModelRouter;
-
-    @Autowired
-    private CircuitBreakerManager circuitBreakerManager;
-
-    @Autowired(required = false)
     private TrafficShiftingRouter trafficShiftingRouter;
 
     @PostConstruct
@@ -58,8 +50,66 @@ public class ModelAutoConfiguration {
                 config.getAgentModelMapping() != null ? config.getAgentModelMapping().size() : 0);
     }
 
+    @Bean
+    public CircuitBreakerManager circuitBreakerManager(@Qualifier("chatModelPool") ChatModelPool chatModelPool) {
+        CircuitBreakerManager manager = new CircuitBreakerManager();
+        manager.setModelPool(chatModelPool);
+        return manager;
+    }
+
+    @Bean
+    @Primary
+    public AgentModelRouter agentModelRouter(@Qualifier("chatModelPool") ChatModelPool chatModelPool,
+                                           @Qualifier("capabilityRoutingStrategy") com.tlq.rectagent.model.routing.CapabilityRoutingStrategy capabilityStrategy,
+                                           @Qualifier("priorityRoutingStrategy") com.tlq.rectagent.model.routing.PriorityRoutingStrategy priorityStrategy,
+                                           @Qualifier("costRoutingStrategy") com.tlq.rectagent.model.routing.CostRoutingStrategy costStrategy,
+                                           TrafficShiftingRouter trafficShiftingRouter) {
+        AgentModelRouter router = new AgentModelRouter();
+        router.setModelPool(chatModelPool);
+        router.setCapabilityStrategy(capabilityStrategy);
+        router.setPriorityStrategy(priorityStrategy);
+        router.setCostStrategy(costStrategy);
+        router.setTrafficShiftingRouter(trafficShiftingRouter);
+        return router;
+    }
+
+    @Bean
+    public TrafficShiftingRouter trafficShiftingRouter(@Qualifier("chatModelPool") ChatModelPool chatModelPool) {
+        TrafficShiftingRouter router = new TrafficShiftingRouter();
+        router.setModelPool(chatModelPool);
+        this.trafficShiftingRouter = router;
+        return router;
+    }
+
+    @Bean
+    @Primary
+    public com.tlq.rectagent.model.routing.CapabilityRoutingStrategy capabilityRoutingStrategy(@Qualifier("chatModelPool") ChatModelPool chatModelPool) {
+        com.tlq.rectagent.model.routing.CapabilityRoutingStrategy strategy = 
+                new com.tlq.rectagent.model.routing.CapabilityRoutingStrategy();
+        strategy.setModelPool(chatModelPool);
+        return strategy;
+    }
+
+    @Bean
+    @Primary
+    public com.tlq.rectagent.model.routing.PriorityRoutingStrategy priorityRoutingStrategy(@Qualifier("chatModelPool") ChatModelPool chatModelPool) {
+        com.tlq.rectagent.model.routing.PriorityRoutingStrategy strategy = 
+                new com.tlq.rectagent.model.routing.PriorityRoutingStrategy();
+        strategy.setModelPool(chatModelPool);
+        return strategy;
+    }
+
+    @Bean
+    @Primary
+    public com.tlq.rectagent.model.routing.CostRoutingStrategy costRoutingStrategy(@Qualifier("chatModelPool") ChatModelPool chatModelPool) {
+        com.tlq.rectagent.model.routing.CostRoutingStrategy strategy = 
+                new com.tlq.rectagent.model.routing.CostRoutingStrategy();
+        strategy.setModelPool(chatModelPool);
+        return strategy;
+    }
+
     private void initProviderConfigs() {
-        if (config.getProviders() == null) {
+        if (config.getProviders() == null || agentModelRouter == null) {
             return;
         }
 
@@ -87,12 +137,7 @@ public class ModelAutoConfiguration {
             return apiKey;
         }
 
-        if ("dashscope".equalsIgnoreCase(providerConfig.getType())) {
-            String envKey = System.getenv("DASHSCOPE_API_KEY");
-            if (envKey != null && !envKey.isEmpty()) {
-                return envKey;
-            }
-        } else if ("openai".equalsIgnoreCase(providerConfig.getType())) {
+        if ("openai".equalsIgnoreCase(providerConfig.getType())) {
             String envKey = System.getenv("OPENAI_API_KEY");
             if (envKey != null && !envKey.isEmpty()) {
                 return envKey;
@@ -108,7 +153,7 @@ public class ModelAutoConfiguration {
     }
 
     private void initModelInstances() {
-        if (config.getModels() == null || config.getProviders() == null) {
+        if (config.getModels() == null || config.getProviders() == null || agentModelRouter == null) {
             return;
         }
 
@@ -147,13 +192,13 @@ public class ModelAutoConfiguration {
     }
 
     private void initAgentMapping() {
-        if (config.getAgentModelMapping() != null && !config.getAgentModelMapping().isEmpty()) {
+        if (config.getAgentModelMapping() != null && !config.getAgentModelMapping().isEmpty() && agentModelRouter != null) {
             agentModelRouter.setAgentModelMapping(config.getAgentModelMapping());
         }
     }
 
     private void initFallbackChains() {
-        if (config.getModelFallbackChains() != null && !config.getModelFallbackChains().isEmpty()) {
+        if (config.getModelFallbackChains() != null && !config.getModelFallbackChains().isEmpty() && agentModelRouter != null) {
             Map<String, List<String>> chains = new HashMap<>();
             config.getModelFallbackChains().forEach((key, value) -> {
                 if (value != null && !value.isEmpty()) {
@@ -165,48 +210,30 @@ public class ModelAutoConfiguration {
     }
 
     private void initTrafficShifting() {
-        if (trafficShiftingRouter == null) {
+        if (trafficShiftingRouter == null || config.getTrafficShifting() == null) {
             return;
         }
 
-        if (config.getTrafficShifting() != null) {
-            trafficShiftingRouter.setEnabled(config.getTrafficShifting().isEnabled());
+        trafficShiftingRouter.setEnabled(config.getTrafficShifting().isEnabled());
 
-            if (config.getTrafficShifting().getRules() != null) {
-                List<com.tlq.rectagent.model.config.TrafficShiftingRule> rules = config.getTrafficShifting().getRules()
-                        .stream()
-                        .map(r -> {
-                            com.tlq.rectagent.model.config.TrafficShiftingRule rule =
-                                    new com.tlq.rectagent.model.config.TrafficShiftingRule();
-                            rule.setAgent(r.getAgent());
-                            rule.setModel(r.getModel());
-                            rule.setPercentage(r.getPercentage());
-                            return rule;
-                        })
-                        .toList();
-                trafficShiftingRouter.registerRules(rules);
-            }
+        if (config.getTrafficShifting().getRules() != null) {
+            List<com.tlq.rectagent.model.config.TrafficShiftingRule> rules = config.getTrafficShifting().getRules()
+                    .stream()
+                    .map(r -> {
+                        com.tlq.rectagent.model.config.TrafficShiftingRule rule =
+                                new com.tlq.rectagent.model.config.TrafficShiftingRule();
+                        rule.setAgent(r.getAgent());
+                        rule.setModel(r.getModel());
+                        rule.setPercentage(r.getPercentage());
+                        return rule;
+                    })
+                    .toList();
+            trafficShiftingRouter.registerRules(rules);
         }
     }
 
-    @Bean
-    public ChatModelPool chatModelPool() {
+    @org.springframework.context.annotation.Bean
+    public static com.tlq.rectagent.model.pool.ChatModelPool chatModelPool() {
         return new ChatModelPool();
-    }
-
-    @Bean
-    public CircuitBreakerManager circuitBreakerManager() {
-        return new CircuitBreakerManager();
-    }
-
-    @Bean
-    @Primary
-    public AgentModelRouter agentModelRouter() {
-        return new AgentModelRouter();
-    }
-
-    @Bean
-    public TrafficShiftingRouter trafficShiftingRouter() {
-        return new TrafficShiftingRouter();
     }
 }

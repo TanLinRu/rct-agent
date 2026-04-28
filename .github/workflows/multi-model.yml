@@ -41,7 +41,7 @@ jobs:
         run: |
           mvn -B -pl rect-agent-core -am test \
             -Dtest="ModelRouterTest,ModelProviderFactoryTest,ModelRegistryTest,"\
-                   "DashScopeProviderIntegrationTest,OpenAIProviderIntegrationTest,"\
+                   "OpenAIProviderIntegrationTest,"\
                    "FallbackStrategyTest,AgentModelSelectorTest,SupervisorAgentTest"
         continue-on-error: true
 

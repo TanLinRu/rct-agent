@@ -3,8 +3,8 @@ package com.tlq.rectagent.config;
 import com.tlq.rectagent.model.ModelProvider;
 import com.tlq.rectagent.model.ModelRegistry;
 import com.tlq.rectagent.model.ModelProviderConfig;
-import com.tlq.rectagent.model.DashScopeProvider;
 import com.tlq.rectagent.model.OpenAIProvider;
+import com.tlq.rectagent.model.AnthropicProvider;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -14,32 +14,32 @@ import java.util.Map;
 public class AgentModelSelectorTest {
     @Test
     public void selectsProviderForAgent() {
-        ModelProviderConfig dcfg = new ModelProviderConfig();
-        dcfg.setName("dash"); dcfg.setEnabled(true); dcfg.setType("dashscope");
-        dcfg.setModel("default"); dcfg.setPriority(1);
-        DashScopeProvider dash = new DashScopeProvider(dcfg);
+        ModelProviderConfig openaiCfg = new ModelProviderConfig();
+        openaiCfg.setName("openai"); openaiCfg.setEnabled(true); openaiCfg.setType("openai");
+        openaiCfg.setModel("gpt-4"); openaiCfg.setPriority(1);
+        OpenAIProvider openai = new OpenAIProvider(openaiCfg);
 
-        ModelProviderConfig ocfg = new ModelProviderConfig();
-        ocfg.setName("openai"); ocfg.setEnabled(true); ocfg.setType("openai");
-        ocfg.setModel("gpt-4"); ocfg.setPriority(2);
-        OpenAIProvider openai = new OpenAIProvider(ocfg);
+        ModelProviderConfig anthropicCfg = new ModelProviderConfig();
+        anthropicCfg.setName("anthropic"); anthropicCfg.setEnabled(true); anthropicCfg.setType("anthropic");
+        anthropicCfg.setModel("claude-3"); anthropicCfg.setPriority(2);
+        AnthropicProvider anthropic = new AnthropicProvider(anthropicCfg);
 
         ModelRegistry reg = new ModelRegistry();
-        reg.register(dash); reg.register(openai);
+        reg.register(openai); reg.register(anthropic);
 
         Map<String, String> map = new HashMap<>();
-        map.put("intent_recognition_agent", "dash");
-        map.put("data_analysis_agent", "openai");
+        map.put("intent_recognition_agent", "openai");
+        map.put("data_analysis_agent", "anthropic");
 
         AgentModelSelector selector = new AgentModelSelector(reg, map);
 
         ModelProvider selected = selector.selectForAgentOrDefault("intent_recognition_agent");
         assertNotNull(selected);
-        assertEquals("dash", selected.getName());
+        assertEquals("openai", selected.getName());
 
         ModelProvider selected2 = selector.selectForAgentOrDefault("data_analysis_agent");
         assertNotNull(selected2);
-        assertEquals("openai", selected2.getName());
+        assertEquals("anthropic", selected2.getName());
 
         ModelProvider fallback = selector.selectForAgentOrDefault("unknown_agent");
         assertNull(fallback);

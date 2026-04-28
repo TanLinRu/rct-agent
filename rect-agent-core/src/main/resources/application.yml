@@ -2,9 +2,12 @@ spring:
   application:
     name: rect-agent
   ai:
-    dashscope:
-      enabled: true
-      api-key: ${DASHSCOPE_API_KEY:}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      chat:
+        options:
+          model: ${MODEL_NAME:gpt-4o-mini}
   datasource:
     url: jdbc:h2:mem:agentdb;DB_CLOSE_DELAY=-1;MODE=MySQL;CASE_INSENSITIVE_IDENTIFIERS=YES
     driver-class-name: org.h2.Driver
@@ -33,6 +36,9 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 rectagent:
+  compaction:
+    preserve-recent: 4
+    max-tokens: 10000
   prompts:
     intent-recognition: "你是一位专业的意图识别专家，擅长分析用户的查询意图。请仔细分析用户的输入，识别出用户的具体意图，并返回结构化的意图信息。输出格式：{\"intent\": \"...\", \"entities\": [...], \"confidence\": 0.95}"
     dynamic-prompt: "你是一位专业的提示词工程师，擅长根据上下文生成优化的提示词。请根据用户的意图和上下文信息，生成一个针对性强、效果好的提示词。"
@@ -42,12 +48,14 @@ rectagent:
     max-tokens-before-summary: 4000
     messages-to-keep: 20
     compression:
-      enabled: false
+      enabled: true
       threshold-ratio: 0.7
       keep-recent: 5
       preserve-tool-calls: true
       max-summary-tokens: 1000
       strategy: incremental
+    dynamic-boundary:
+      enabled: true
   context:
     l1:
       hot-turns: 5
@@ -59,84 +67,38 @@ rectagent:
     window-keep: 2
 
   model:
-    default-model: dashscope-qwen-turbo
+    default-model: openai-gpt4o-mini
     routing-strategy: cost
 
     providers:
-      dashscope:
-        enabled: true
-        type: dashscope
-        base-url: https://dashscope.aliyuncs.com
-        api-key: ${DASHSCOPE_API_KEY:}
-        timeout: 30000
-        max-retries: 2
       openai:
-        enabled: false
         type: openai
         base-url: https://api.openai.com/v1
         api-key: ${OPENAI_API_KEY:}
         timeout: 60000
         max-retries: 3
-      anthropic:
-        enabled: false
-        type: anthropic
-        base-url: https://api.anthropic.com
-        api-key: ${ANTHROPIC_API_KEY:}
-        timeout: 60000
-        max-retries: 3
 
     models:
-      dashscope-qwen-turbo:
-        provider: dashscope
-        model: qwen-turbo
-        cost-per-token: 0.001
-        priority: 1
-        capabilities: intent,prompt,chat
-      dashscope-qwen-plus:
-        provider: dashscope
-        model: qwen-plus
-        cost-per-token: 0.01
-        priority: 2
-        capabilities: analysis,reasoning
       openai-gpt4o-mini:
         provider: openai
         model: gpt-4o-mini
         cost-per-token: 0.002
-        priority: 3
-        capabilities: analysis,reasoning,chat
-      anthropic-haiku:
-        provider: anthropic
-        model: claude-3-haiku
-        cost-per-token: 0.003
-        priority: 4
-        capabilities: analysis,chat
+        priority: 1
+        capabilities: intent,prompt,chat,analysis,reasoning
+      openai-gpt4o:
+        provider: openai
+        model: gpt-4o
+        cost-per-token: 0.01
+        priority: 2
+        capabilities: analysis,reasoning
 
     agent-model-mapping:
-      intent_recognition_agent: dashscope-qwen-turbo
-      dynamic_prompt_agent: dashscope-qwen-turbo
+      intent_recognition_agent: openai-gpt4o-mini
+      dynamic_prompt_agent: openai-gpt4o-mini
       data_analysis_agent: openai-gpt4o-mini
 
     model-fallback-chains:
-      openai-gpt4o-mini: dashscope-qwen-turbo,dashscope-qwen-plus
-      anthropic-haiku: openai-gpt4o-mini,dashscope-qwen-turbo
-
-    circuit-breaker:
-      enabled: true
-      error-rate-threshold: 0.5
-      slow-call-duration-ms: 5000
-      slow-call-rate-threshold: 0.8
-      min-call-count: 10
-      wait-duration-in-open-ms: 30000
-
-    traffic-shifting:
-      enabled: false
-      rules:
-        - agent: data_analysis_agent
-          model: openai-gpt4o-mini
-          percentage: 10
-        - agent: data_analysis_agent
-          model: dashscope-qwen-turbo
-          percentage: 90
+      openai-gpt4o-mini: openai-gpt4o
 
 server:
   port: 8080

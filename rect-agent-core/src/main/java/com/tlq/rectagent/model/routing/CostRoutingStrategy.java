@@ -17,8 +17,11 @@ public class CostRoutingStrategy {
 
     public static final String NAME = "cost";
 
-    @Autowired
     private ChatModelPool modelPool;
+
+    public void setModelPool(ChatModelPool modelPool) {
+        this.modelPool = modelPool;
+    }
 
     public String getName() {
         return NAME;

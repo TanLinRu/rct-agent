@@ -1,11 +1,10 @@
 package com.tlq.rectagent.config;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -13,37 +12,34 @@ import org.springframework.stereotype.Component;
 @Component
 public class ChatModelFactory {
 
-    @Value("${spring.ai.dashscope.api-key:}")
+    @Value("${spring.ai.openai.api-key:}")
     private String apiKey;
 
-    private DashScopeApi dashScopeApi;
-    private ChatModel chatModel;
+    @Value("${spring.ai.openai.base-url:}")
+    private String baseUrl;
+
+    private final ChatModel chatModel;
+
+    @Autowired
+    public ChatModelFactory(ChatModel chatModel) {
+        this.chatModel = chatModel;
+    }
 
     @PostConstruct
     public void init() {
         if (apiKey == null || apiKey.isEmpty()) {
-            apiKey = System.getenv("DASHSCOPE_API_KEY");
+            apiKey = System.getenv("OPENAI_API_KEY");
         }
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            baseUrl = System.getenv("OPENAI_BASE_URL");
+        }
+
         if (apiKey == null || apiKey.isEmpty()) {
-            log.warn("DashScope API key is not configured. ChatModelFactory will run in mock mode. "
-                    + "Set spring.ai.dashscope.api-key or DASHSCOPE_API_KEY environment variable to enable real API calls.");
-            this.chatModel = new MockChatModel();
-            return;
+            log.warn("OpenAI API key is not configured. ChatModelFactory will run in mock mode. "
+                    + "Set spring.ai.openai.api-key or OPENAI_API_KEY environment variable to enable real API calls.");
+        } else {
+            log.info("ChatModelFactory initialized with API: baseUrl={}, model will be provided by Spring AI", baseUrl);
         }
-
-        this.dashScopeApi = DashScopeApi.builder()
-                .apiKey(apiKey)
-                .build();
-
-        this.chatModel = DashScopeChatModel.builder()
-                .dashScopeApi(dashScopeApi)
-                .build();
-
-        log.info("ChatModelFactory initialized successfully");
-    }
-
-    public DashScopeApi getDashScopeApi() {
-        return dashScopeApi;
     }
 
     public ChatModel getChatModel() {

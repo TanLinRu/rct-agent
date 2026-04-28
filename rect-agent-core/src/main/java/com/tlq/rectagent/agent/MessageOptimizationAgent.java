@@ -1,113 +1,110 @@
 package com.tlq.rectagent.agent;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.alibaba.cloud.ai.graph.agent.ReactAgent;
-import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
-import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
-import com.alibaba.cloud.ai.graph.store.stores.MemoryStore;
-import com.alibaba.cloud.ai.graph.store.StoreItem;
 import com.tlq.rectagent.config.MockChatModel;
-import com.tlq.rectagent.interceptor.ModelProcessInterceptor;
-import com.tlq.rectagent.interceptor.ToolMonitoringInterceptor;
+import com.tlq.rectagent.model.router.AgentModelRouter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * 消息优化智能体
- * 负责处理消息记录和压缩存储
- */
 @Slf4j
 @Component
 public class MessageOptimizationAgent {
 
-    @Value("${spring.ai.dashscope.api-key:}")
+    @Value("${spring.ai.openai.api-key:}")
     private String apiKey;
 
-    private final MemoryStore memoryStore;
+    @Autowired
+    private AgentModelRouter agentModelRouter;
 
-    public MessageOptimizationAgent() {
-        this.memoryStore = new MemoryStore();
-    }
+    private static final String AGENT_NAME = "message_optimization_agent";
+    private static final Set<String> REQUIRED_CAPABILITIES = Set.of("optimization");
 
-    public ReactAgent createAgent() {
-        ChatModel chatModel;
-        if (apiKey == null || apiKey.isEmpty()) {
-            log.warn("MessageOptimizationAgent: DashScope API key not configured, using mock model");
-            chatModel = new MockChatModel();
-        } else {
-            DashScopeApi dashScopeApi = DashScopeApi.builder()
-                    .apiKey(apiKey)
-                    .build();
-            chatModel = DashScopeChatModel.builder()
-                    .dashScopeApi(dashScopeApi)
-                    .build();
-        }
+    private static final String SYSTEM_PROMPT = """
+            你是一位专业的消息优化专家，擅长处理和压缩消息记录。
+            请对输入的消息进行分析，提取关键信息，并生成压缩后的摘要。
+            """;
 
-        // 创建消息优化智能体
-        return ReactAgent.builder()
-                .name("message_optimization_agent")
-                .chatOptions(ChatOptions.builder().build())
-                .model(chatModel)
-                .systemPrompt("你是一位专业的消息优化专家，擅长处理和压缩消息记录。请对输入的消息进行分析，提取关键信息，并生成压缩后的摘要。")
-                .saver(new MemorySaver())
-                .interceptors(Arrays.asList(new ModelProcessInterceptor(), new ToolMonitoringInterceptor()))
-                .build();
-    }
+    private final Map<String, List<MessageRecord>> memoryStore = new ConcurrentHashMap<>();
 
-    /**
-     * 压缩消息
-     * @param message 原始消息
-     * @return 压缩后的消息
-     */
+    private record MessageRecord(
+            String id,
+            String content,
+            String context,
+            long timestamp
+    ) {}
+
     public String compressMessage(String message) {
-        ReactAgent agent = createAgent();
+        ChatModel chatModel = getChatModel();
+        ChatClient client = ChatClient.builder(chatModel).build();
+
         String prompt = String.format("请对以下消息进行压缩，提取关键信息，生成简洁的摘要：\n%s", message);
         try {
-            String result = agent.call(prompt).getText();
+            String result = client.prompt()
+                    .system(SYSTEM_PROMPT)
+                    .user(prompt)
+                    .call()
+                    .content();
+
             int inputLen = message != null ? message.length() : 0;
             int resultLen = result != null ? result.length() : 0;
-            log.info("消息压缩成功: 原始长度={}, 压缩后长度={}, 压缩率={}%", 
-                    inputLen, resultLen, 
+            log.info("消息压缩成功: 原始长度={}, 压缩后长度={}, 压缩率={}%",
+                    inputLen, resultLen,
                     inputLen > 0 ? (resultLen * 100 / inputLen) : 0);
             log.debug("消息压缩详情: 原始={}", message);
             return result;
-        } catch (GraphRunnerException e) {
+        } catch (Exception e) {
             log.error("消息压缩失败: {}", e.getMessage(), e);
             return "消息压缩失败: " + e.getMessage();
         }
     }
 
-    /**
-     * 保存消息到长期记忆
-     * @param userId 用户ID
-     * @param message 消息内容
-     * @param context 上下文信息
-     */
-    public void saveMessageToMemory(String userId, String message, String context) {
-        List<String> namespace = List.of("messages", userId);
-        Map<String, Object> messageData = new HashMap<>();
-        messageData.put("content", message);
-        messageData.put("context", context);
-        messageData.put("timestamp", System.currentTimeMillis());
-        
-        StoreItem item = StoreItem.of(namespace, "msg_" + System.currentTimeMillis(), messageData);
-        memoryStore.putItem(item);
+    private ChatModel getChatModel() {
+        if (apiKey == null || apiKey.isEmpty()) {
+            log.warn("MessageOptimizationAgent: OpenAI API key not configured, using mock model");
+            return new MockChatModel();
+        }
+
+        ChatModel chatModel = agentModelRouter.getChatModel(AGENT_NAME, REQUIRED_CAPABILITIES);
+        if (chatModel != null) {
+            return chatModel;
+        }
+
+        log.warn("MessageOptimizationAgent: AgentModelRouter returned null, using mock model");
+        return new MockChatModel();
     }
 
-    /**
-     * 从长期记忆中获取消息
-     * @param userId 用户ID
-     * @param messageId 消息ID
-     * @return 消息内容
-     */
-    public Optional<StoreItem> getMessageFromMemory(String userId, String messageId) {
-        List<String> namespace = List.of("messages", userId);
-        return memoryStore.getItem(namespace, messageId);
+    public void saveMessageToMemory(String userId, String message, String context) {
+        String namespace = "messages:" + userId;
+        List<MessageRecord> records = memoryStore.computeIfAbsent(namespace, k -> new ArrayList<>());
+
+        MessageRecord record = new MessageRecord(
+                "msg_" + System.currentTimeMillis(),
+                message,
+                context,
+                System.currentTimeMillis()
+        );
+        records.add(record);
+    }
+
+    public Optional<MessageRecord> getMessageFromMemory(String userId, String messageId) {
+        String namespace = "messages:" + userId;
+        List<MessageRecord> records = memoryStore.get(namespace);
+        if (records == null) {
+            return Optional.empty();
+        }
+        return records.stream()
+                .filter(r -> r.id().equals(messageId))
+                .findFirst();
+    }
+
+    public List<MessageRecord> getMessagesByUser(String userId) {
+        String namespace = "messages:" + userId;
+        return new ArrayList<>(memoryStore.getOrDefault(namespace, List.of()));
     }
 }

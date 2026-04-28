@@ -5,7 +5,7 @@ import java.util.List;
 public class ModelProviderConfig {
     private String name;
     private boolean enabled;
-    private String type; // e.g. dashscope, openai
+    private String type; // e.g. openai, anthropic
     private String apiKey;
     private String model;
     private double costPerToken;

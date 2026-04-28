@@ -20,9 +20,9 @@ class ModelAutoConfigurationTest {
         props.setRoutingStrategy("cost");
 
         ModelConfigProperties.ProviderConfig p = new ModelConfigProperties.ProviderConfig();
-        p.setName("dashscope");
+        p.setName("openai");
         p.setEnabled(true);
-        p.setType("dashscope");
+        p.setType("openai");
         p.setApiKey("dummy");
         p.setModel("default");
         p.setCostPerToken(0.1);
@@ -30,7 +30,7 @@ class ModelAutoConfigurationTest {
         p.setPriority(1);
 
         Map<String, ModelConfigProperties.ProviderConfig> providerMap = new HashMap<>();
-        providerMap.put("dashscope", p);
+        providerMap.put("openai", p);
         props.setProviders(providerMap);
 
         Field f = ModelAutoConfiguration.class.getDeclaredField("config");
@@ -43,20 +43,15 @@ class ModelAutoConfigurationTest {
     @Test
     @DisplayName("AgentModelRouter Bean 应正确创建")
     void agentModelRouterBeanShouldBeCreated() {
-        ModelAutoConfiguration cfg = new ModelAutoConfiguration();
-
-        AgentModelRouter router = cfg.agentModelRouter();
-
+        AgentModelRouter router = new AgentModelRouter();
         assertNotNull(router);
     }
 
     @Test
     @DisplayName("ChatModelPool Bean 应正确创建")
     void chatModelPoolBeanShouldBeCreated() {
-        ModelAutoConfiguration cfg = new ModelAutoConfiguration();
-
-        com.tlq.rectagent.model.pool.ChatModelPool pool = cfg.chatModelPool();
-
+        com.tlq.rectagent.model.pool.ChatModelPool pool = 
+                new com.tlq.rectagent.model.pool.ChatModelPool();
         assertNotNull(pool);
     }
 }

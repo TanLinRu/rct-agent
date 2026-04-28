@@ -1,7 +1,5 @@
 package com.tlq.rectagent.model.pool;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.tlq.rectagent.config.MockChatModel;
 import com.tlq.rectagent.model.config.CircuitBreakerProperties;
 import com.tlq.rectagent.model.config.ModelInstanceConfig;
@@ -107,33 +105,7 @@ public class ChatModelPool {
     }
 
     private ChatModel createChatModel(ModelInstanceConfig config, ProviderConfig providerConfig) {
-        String provider = config.getProvider();
-
-        if ("dashscope".equals(provider)) {
-            return createDashScopeChatModel(providerConfig, config.getModel());
-        }
-
-        log.warn("Provider '{}' not supported yet, using mock model", provider);
+        log.warn("ChatModelPool: direct ChatModel creation not fully implemented, using mock model");
         return new MockChatModel();
-    }
-
-    private ChatModel createDashScopeChatModel(ProviderConfig config, String model) {
-        String apiKey = config.getApiKey();
-        if (apiKey == null || apiKey.isEmpty()) {
-            apiKey = System.getenv("DASHSCOPE_API_KEY");
-        }
-
-        if (apiKey == null || apiKey.isEmpty()) {
-            log.warn("DashScope API key not configured, using mock model");
-            return new MockChatModel();
-        }
-
-        DashScopeApi api = DashScopeApi.builder()
-                .apiKey(apiKey)
-                .build();
-
-        return DashScopeChatModel.builder()
-                .dashScopeApi(api)
-                .build();
     }
 }

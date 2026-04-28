@@ -11,9 +11,9 @@ import com.tlq.rectagent.skill.parser.PdfParser;
 import com.tlq.rectagent.skill.parser.OfficeParser;
 import com.tlq.rectagent.skill.validator.DocumentValidator;
 import com.tlq.rectagent.skill.validator.DefaultDocumentValidator;
-import com.tlq.rectagent.skill.learner.DashScopeLearner;
+import com.tlq.rectagent.skill.learner.ReActLearner;
 import com.tlq.rectagent.skill.learner.LMLearner;
-import com.tlq.rectagent.skill.executor.DashScopeExecutor;
+import com.tlq.rectagent.skill.executor.ReActExecutor;
 import com.tlq.rectagent.skill.executor.RequirementExecutor;
 import com.tlq.rectagent.skill.depositor.DocumentDepositor;
 import com.tlq.rectagent.skill.depositor.DefaultDocumentDepositor;
@@ -56,7 +56,7 @@ public class SkillConfig {
             .model(chatModelFactory.getChatModel())
             .systemPrompt("你是一个专业的知识学习助手，擅长从文档中提取核心信息并总结。")
             .build();
-        return new DashScopeLearner(learnerAgent);
+        return new ReActLearner(learnerAgent);
     }
 
     @Bean
@@ -66,7 +66,7 @@ public class SkillConfig {
             .model(chatModelFactory.getChatModel())
             .systemPrompt("你是一个专业的需求实现助手，擅长基于学习到的知识实现用户的需求。")
             .build();
-        return new DashScopeExecutor(executorAgent);
+        return new ReActExecutor(executorAgent);
     }
 
     @Bean

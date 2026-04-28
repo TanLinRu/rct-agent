@@ -2,9 +2,8 @@ spring:
   application:
     name: rect-agent-test
   ai:
-    dashscope:
-      enabled: false
-      api-key: ${DASHSCOPE_API_KEY:}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL;CASE_INSENSITIVE_IDENTIFIERS=YES
     driver-class-name: org.h2.Driver
@@ -35,19 +34,18 @@ rectagent:
   model:
     routingStrategy: cost
     providers:
-      - name: dashscope-primary
-        enabled: true
-        type: dashscope
-        model: qwen-turbo
-        apiKey: ${DASHSCOPE_API_KEY:${spring.ai.dashscope.api-key:}}
-        costPerToken: 0.001
+      openai:
+        type: openai
+        base-url: https://api.openai.com/v1
+        api-key: ${OPENAI_API_KEY:}
+        timeout: 60000
+        max-retries: 3
+    models:
+      openai-gpt4o-mini:
+        provider: openai
+        model: gpt-4o-mini
+        cost-per-token: 0.002
         priority: 1
-        capability: chat
-        mock: false
-        endpoints:
-          - https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation
-        maxRetries: 2
-        retryDelayMs: 500
   context:
     l1:
       hot-turns: 5

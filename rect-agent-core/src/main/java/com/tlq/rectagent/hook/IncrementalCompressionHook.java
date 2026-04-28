@@ -1,13 +1,8 @@
 package com.tlq.rectagent.hook;
 
-import com.alibaba.cloud.ai.graph.RunnableConfig;
-import com.alibaba.cloud.ai.graph.agent.hook.HookPosition;
-import com.alibaba.cloud.ai.graph.agent.hook.HookPositions;
-import com.alibaba.cloud.ai.graph.agent.hook.messages.AgentCommand;
-import com.alibaba.cloud.ai.graph.agent.hook.messages.MessagesModelHook;
-import com.alibaba.cloud.ai.graph.agent.hook.messages.UpdatePolicy;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,9 +14,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
-@HookPositions({HookPosition.BEFORE_MODEL})
 @Component
-public class IncrementalCompressionHook extends MessagesModelHook {
+public class IncrementalCompressionHook {
 
     private static final String TRACE_ID_KEY = "traceId";
 
@@ -37,13 +31,14 @@ public class IncrementalCompressionHook extends MessagesModelHook {
     @Value("${rectagent.hook.compression.preserve-tool-calls:true}")
     private boolean preserveToolCalls;
 
-    @Value("${rectagent.hook.compression.max-summary-tokens:1000}")
-    private int maxSummaryTokens;
-
     @Value("${rectagent.token.max-input:8000}")
     private int maxInputTokens;
 
     private final Map<String, CompressionState> sessionStates = new ConcurrentHashMap<>();
+
+    public String getName() {
+        return "IncrementalCompressionHook";
+    }
 
     public double getThresholdRatio() {
         return thresholdRatio;
@@ -57,15 +52,25 @@ public class IncrementalCompressionHook extends MessagesModelHook {
         return enabled;
     }
 
-    @Override
-    public String getName() {
-        return "IncrementalCompressionHook";
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
-    @Override
-    public AgentCommand beforeModel(List<Message> previousMessages, RunnableConfig config) {
+    public void setThresholdRatio(double thresholdRatio) {
+        this.thresholdRatio = thresholdRatio;
+    }
+
+    public void setKeepRecent(int keepRecent) {
+        this.keepRecent = keepRecent;
+    }
+
+    public void setMaxInputTokens(int maxInputTokens) {
+        this.maxInputTokens = maxInputTokens;
+    }
+
+    public List<Message> beforeModel(List<Message> previousMessages, String sessionId) {
         if (!enabled) {
-            return new AgentCommand(previousMessages);
+            return previousMessages;
         }
 
         String traceId = MDC.get(TRACE_ID_KEY);
@@ -73,32 +78,30 @@ public class IncrementalCompressionHook extends MessagesModelHook {
             traceId = "unknown";
         }
 
-        String sessionId = extractSessionId(config);
-        
         try {
             int currentTokens = estimateTokens(previousMessages);
             int threshold = (int) (maxInputTokens * thresholdRatio);
 
-            log.debug("[{}] 压缩检查(BEFORE): 当前token={}, 阈值={}, sessionId={}", 
+            log.debug("[{}] 压缩检查(BEFORE): 当前token={}, 阈值={}, sessionId={}",
                     traceId, currentTokens, threshold, sessionId);
 
             if (currentTokens > threshold) {
                 List<Message> compressed = compressMessages(previousMessages, sessionId, traceId);
-                
+
                 CompressionState state = sessionStates.computeIfAbsent(sessionId, k -> new CompressionState());
                 state.incrementCompressionCount();
 
-                log.info("[{}] 增量压缩完成: {}条消息 -> {}条消息, 压缩次数={}", 
-                        traceId, previousMessages.size(), compressed.size(), 
+                log.info("[{}] 增量压缩完成: {}条消息 -> {}条消息, 压缩次数={}",
+                        traceId, previousMessages.size(), compressed.size(),
                         state.getCompressionCount());
-                return new AgentCommand(compressed, UpdatePolicy.REPLACE);
+                return compressed;
             }
 
         } catch (Exception e) {
             log.warn("[{}] 增量压缩失败: {}", traceId, e.getMessage());
         }
 
-        return new AgentCommand(previousMessages);
+        return previousMessages;
     }
 
     private List<Message> compressMessages(List<Message> messages, String sessionId, String traceId) {
@@ -149,11 +152,13 @@ public class IncrementalCompressionHook extends MessagesModelHook {
         int toolCount = 0;
 
         for (Message msg : messages) {
-            String role = msg.getMessageType() != null ? msg.getMessageType().toString() : "";
-            switch (role.toLowerCase()) {
-                case "user" -> userCount++;
-                case "assistant" -> assistantCount++;
-                case "tool" -> toolCount++;
+            if (msg instanceof UserMessage) {
+                userCount++;
+            } else if (msg instanceof AssistantMessage am) {
+                assistantCount++;
+                if (am.getToolCalls() != null && !am.getToolCalls().isEmpty()) {
+                    toolCount++;
+                }
             }
         }
 
@@ -169,12 +174,8 @@ public class IncrementalCompressionHook extends MessagesModelHook {
     }
 
     private boolean hasToolCalls(Message message) {
-        try {
-            if (message instanceof org.springframework.ai.chat.messages.AssistantMessage am) {
-                return am.getToolCalls() != null && !am.getToolCalls().isEmpty();
-            }
-        } catch (Exception e) {
-            log.debug("检查tool calls失败: {}", e.getMessage());
+        if (message instanceof AssistantMessage am) {
+            return am.getToolCalls() != null && !am.getToolCalls().isEmpty();
         }
         return false;
     }
@@ -192,16 +193,6 @@ public class IncrementalCompressionHook extends MessagesModelHook {
             }
         }
         return total;
-    }
-
-    private String extractSessionId(RunnableConfig config) {
-        if (config != null && config.context() != null) {
-            Object value = config.context().get("sessionId");
-            if (value != null) {
-                return String.valueOf(value);
-            }
-        }
-        return MDC.get("sessionId");
     }
 
     private static class CompressionState {

@@ -11,30 +11,18 @@ import com.tlq.rectagent.model.routing.CostRoutingStrategy;
 import com.tlq.rectagent.model.routing.PriorityRoutingStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
-@Component
 public class AgentModelRouter {
 
-    @Autowired
     private ChatModelPool modelPool;
-
-    @Autowired
     private CostRoutingStrategy costStrategy;
-
-    @Autowired
     private CapabilityRoutingStrategy capabilityStrategy;
-
-    @Autowired
     private PriorityRoutingStrategy priorityStrategy;
-
-    @Autowired(required = false)
     private TrafficShiftingRouter trafficShiftingRouter;
 
     private Map<String, String> agentModelMapping = new HashMap<>();
@@ -44,7 +32,27 @@ public class AgentModelRouter {
     private Map<String, ModelInstanceConfig> modelConfigs = new HashMap<>();
     private Map<String, ProviderConfig> providerConfigs = new HashMap<>();
 
-    @PostConstruct
+    public void setModelPool(ChatModelPool modelPool) {
+        this.modelPool = modelPool;
+    }
+
+    public void setCostStrategy(CostRoutingStrategy costStrategy) {
+        this.costStrategy = costStrategy;
+    }
+
+    public void setCapabilityStrategy(CapabilityRoutingStrategy capabilityStrategy) {
+        this.capabilityStrategy = capabilityStrategy;
+    }
+
+    public void setPriorityStrategy(PriorityRoutingStrategy priorityStrategy) {
+        this.priorityStrategy = priorityStrategy;
+    }
+
+    public void setTrafficShiftingRouter(TrafficShiftingRouter trafficShiftingRouter) {
+        this.trafficShiftingRouter = trafficShiftingRouter;
+    }
+
+    @jakarta.annotation.PostConstruct
     public void init() {
         log.info("AgentModelRouter initialized with default strategy: {}", defaultStrategy);
     }

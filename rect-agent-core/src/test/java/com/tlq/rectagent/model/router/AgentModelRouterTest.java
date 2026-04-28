@@ -17,16 +17,16 @@ class AgentModelRouterTest {
         AgentModelRouter router = new AgentModelRouter();
 
         Map<String, String> mapping = new HashMap<>();
-        mapping.put("intent_agent", "dashscope-qwen-turbo");
-        mapping.put("analysis_agent", "openai-gpt4o-mini");
+        mapping.put("intent_agent", "openai-gpt4o-mini");
+        mapping.put("analysis_agent", "openai-gpt4o");
         router.setAgentModelMapping(mapping);
 
         Map<String, String> result = router.getAgentModelMapping();
 
         assertNotNull(result);
         assertEquals(2, result.size());
-        assertEquals("dashscope-qwen-turbo", result.get("intent_agent"));
-        assertEquals("openai-gpt4o-mini", result.get("analysis_agent"));
+        assertEquals("openai-gpt4o-mini", result.get("intent_agent"));
+        assertEquals("openai-gpt4o", result.get("analysis_agent"));
     }
 
     @Test
@@ -35,7 +35,7 @@ class AgentModelRouterTest {
         AgentModelRouter router = new AgentModelRouter();
 
         Map<String, List<String>> chains = new HashMap<>();
-        chains.put("openai-gpt4o-mini", Arrays.asList("dashscope-qwen-turbo", "anthropic-haiku"));
+        chains.put("openai-gpt4o-mini", Arrays.asList("openai-gpt4o", "anthropic-haiku"));
         router.setModelFallbackChains(chains);
 
         assertNotNull(router);
